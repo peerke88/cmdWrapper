@@ -52,7 +52,7 @@ node.translate.set(pos)
 
 connection works as follows: 
 
-```
+```python
 import cmdWrapper
 # maya commands can be accessed from here as well
 sphere = cmdWrapper.getNode(cmdWrapper.cmds.polySphere()[0])
