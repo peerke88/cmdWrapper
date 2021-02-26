@@ -30,7 +30,7 @@ class _Cmd(object):
             if isinstance(a, (_Attribute, DependNode)):
                 kwargs[k] = unwrap(a)
         return self.fn(*args, **kwargs)
-
+        
 
 class _Cmds(object):
     def __getattr__(self, item):
@@ -427,12 +427,13 @@ def getNode(nodeName=None):
     if type(nodeName) in [str, unicode, bytes]:
         nodeNames = [nodeName]
         _singleNode = True
-    elif isinstance(nodeName, OpenMaya.MObject):
+    elif isinstance(nodeName, _oldMObject):
         nodeFn = OpenMaya.MFnDependencyNode(nodeName)
         nodeNames = [nodeFn.name()]
         _singleNode = True
-    elif nodeName in [list, tuple]:
+    elif type(nodeName) in [list, tuple]:
         nodeNames = nodeName
+    
       
     wrapped = []
     for nodeName in nodeNames:
