@@ -1,17 +1,52 @@
 # -*- coding: utf-8 -*-
+"""
+---------
+MIT License
+
+Copyright (c) 2021 Perry Leijten & Trevor van Hoof
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+---------
+
+Thin wrapper around Maya API & cmds to make interacting with nodes more convenient.
+Read more over at https://github.com/peerke88/cmdWrapper
+"""
+
 from math import degrees
 from maya import cmds as _cmds
-from maya.api.OpenMaya import MMatrix, MVector, MTransformationMatrix, MGlobal, MFnTypedAttribute, MDagPath, MFnDependencyNode, MFnDependencyNode
+from maya.api.OpenMaya import MMatrix, MVector, MTransformationMatrix, MGlobal, \
+    MFnTypedAttribute, MDagPath, MFnDependencyNode, MFnDependencyNode
 import warnings
 
 from maya.OpenMaya import MSelectionList as _oldMSelectionList
 from maya.OpenMaya import MGlobal as _oldMGlobal
 from maya.OpenMaya import MObject as _oldMObject
 
-""" We hijack maya cmds to ensure we can call cmds functions with DependNode and _Attribute instance arguments instead of strings. """
-
 _debug = False
+
+
 class _Cmd(object):
+    """
+    We hijack maya.cmds to ensure we can call cmds functions with DependNode
+    and _Attribute instance arguments instead of strings.
+    """
+
     def __init__(self, fn):
         self.fn = fn
 
@@ -29,10 +64,7 @@ class _Cmd(object):
         for k, a in kwargs.iteritems():
             if isinstance(a, (_Attribute, DependNode)):
                 kwargs[k] = unwrap(a)
-        _func = self.fn(*args, **kwargs)
-        if isStringList(_func):
-            _func = getNode(_func)
-        return _func
+        return self.fn(*args, **kwargs)
 
 
 class _Cmds(object):
@@ -91,10 +123,12 @@ class _Attribute(object):
 
         try:
             t = _cmds.getAttr(str(self._path), type=True)
+        # noinspection PyBroadException
         except:
             if _debug:
                 wanings.warn('Unknown attr type at %s' % self._path)
             return
+
         if t in ('short2',
                  'short3',
                  'long2',
@@ -315,7 +349,9 @@ class DependNode(object):
         return [_Attribute(self._nodeName + '.' + attr) for attr in _cmds.listAttr(self._nodeName, ud=ud)]
 
     def isShape(self):
-        return self.__type in ["nurbsCurve", "nurbsSurface", "mesh", "follicle", "RigSystemControl", "distanceDimShape", "cMuscleKeepOut", "cMuscleObject"]
+        return self.__type in ['nurbsCurve', 'nurbsSurface', 'mesh', 'follicle', 'RigSystemControl',
+                               'distanceDimShape', 'cMuscleKeepOut', 'cMuscleObject']
+
 
 class DagNode(DependNode):
     def parent(self):
@@ -323,9 +359,9 @@ class DagNode(DependNode):
         if p:
             return wrapNode(p)
 
-    def setParent(self, parent, shape = False):
+    def setParent(self, parent, shape=False):
         if shape:
-            _cmds.parent(self._nodeName, parent, add=1, s=1)
+            _cmds.parent(self._nodeName, parent, add=True, s=True)
             return
         _cmds.parent(self._nodeName, parent)
 
@@ -362,7 +398,7 @@ class Transform(DagNode):
 
 
 class Joint(Transform):
-    def setJOM(self, m, ws=False, safe=False):
+    def setJOM(self, m, ws=False):
         if ws:
             parentInverseMatrix = _cmds.getAttr(self._nodeName + '.parentInverseMatrix')
         else:
@@ -397,8 +433,8 @@ _wrapperTypes = {
     'distanceDimShape': Shape,
     'locator': DagNode,
     'cMuscleKeepOut': Shape,
-    'cMuscleObject':Shape,
-    'camera':Shape,
+    'cMuscleObject': Shape,
+    'camera': Shape,
 }
 
 
@@ -412,40 +448,42 @@ def wrapNode(nodeName):
 def createNode(nodeType):
     # note: this is the older version:
     #      return wrapNode(cmds.createNode(nodeType))
-    # its replaced because openMaya is slightly faster, making gains in speed on big rig creations
+    # it's replaced because OpenMaya is slightly faster, making gains in speed on big rig creations
     node = MFnDependencyNode()
     node.create(nodeType)
     return wrapNode(node.name())
 
-def isStringList(inObject):
-    if type(inObject) in [str, unicode, bytes]:
+
+def _isStringOrStringList(inObject):
+    if isinstance(inObject, (str, unicode, bytes)):
         return True
-    if type(inObject) not in [list, tuple]:
+    if not isinstance(inObject, (list, tuple)):
         return False
-    if all(isStringList(elem) for elem in inObject):
+    if all(_isStringOrStringList(elem) for elem in inObject):
         return True
     return False
 
+
 def getNode(nodeName=None):
     if nodeName is None:
-        curSelection = _cmds.ls(sl=1)
+        curSelection = _cmds.ls(sl=True)
         if not curSelection:
-            warnings.warn("no nodeName given and no object selected in maya!")
-            return 
+            warnings.warn('no nodeName given and no object selected in maya!')
+            return
         nodeName = curSelection
 
     nodeNames = []
     _singleNode = False
-    if type(nodeName) in [str, unicode, bytes]:
+    if isinstance(nodeName, (str, unicode, bytes)):
         nodeNames = [nodeName]
         _singleNode = True
     elif isinstance(nodeName, _oldMObject):
         nodeFn = OpenMaya.MFnDependencyNode(nodeName)
         nodeNames = [nodeFn.name()]
         _singleNode = True
-    elif isStringList(nodeName):
+    elif _isStringOrStringList(nodeName):
         nodeNames = nodeName
-    
+
     wrapped = []
     for nodeName in nodeNames:
         wrapped.append(wrapNode(nodeName))
