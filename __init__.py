@@ -419,6 +419,12 @@ class Transform(DagNode):
     def _children(self):
         return cmds.listRelatives(self._nodeName, c=True, f=True) or []
 
+    def children(self):
+        return [wrapNode(child) for child in self._children()]
+
+    def allDescendants(self):
+        return [wrapNode(child) for child in cmds.listRelatives(self._nodeName, ad=True, f=True)]
+
     def numChildren(self):
         return len(self._children())
 
@@ -508,7 +514,7 @@ def getNode(nodeName=None):
         curSelection = cmds.ls(sl=True)
         if not curSelection:
             warnings.warn('no nodeName given and no object selected in maya!')
-            return
+            return []
         nodeName = curSelection
 
     nodeNames = []
@@ -530,6 +536,44 @@ def getNode(nodeName=None):
     if _singleNode:
         return wrapped[0]
     return wrapped
+
+
+def selection():
+    # alias for getNode with no arguments
+    return getNode()
+
+
+def parents(nodeList):
+    unique_parents = []
+    for node in wrapNode(nodeList):
+        if not isinstance(node, Transform):
+            continue
+        parent = node.parent()
+        if parent not in unique_parents:
+            unique_parents.append(parent)
+    return unique_parents
+
+
+def children(nodeList):
+    unique_children = []
+    for node in wrapNode(nodeList):
+        if not isinstance(node, Transform):
+            continue
+        for child in node.children():
+            if child not in unique_children:
+                unique_children.append(child)
+    return unique_children
+
+
+def descendants(nodeList):
+    unique_parents = []
+    for node in wrapNode(nodeList):
+        if not isinstance(node, Transform):
+            continue
+        for child in node.allDescendants():
+            if child not in unique_children:
+                unique_children.append(child)
+    return unique_parents
 
 
 if __name__ == '__main__':
