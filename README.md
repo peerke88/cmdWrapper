@@ -40,8 +40,8 @@ nodes = cmdWrapper.getNode()
 attributes can be used as python attributes directly and will return wrapped math functions
 
 ```python
-import cmdWrapper
-node = cmdWrapper.createNode("transform")
+from cmdWrapper import createNode
+node = createNode("transform")
 #matrix function
 mat = node.worldMatrix[0].get()
 # vector function
@@ -53,11 +53,10 @@ node.translate.set(pos)
 connection works as follows: 
 
 ```python
-import cmdWrapper
-from cmdWrapper import cmds
+from cmdWrapper import cmds, getNode
 # maya commands can be accessed from here as well
-sphere = cmdWrapper.getNode(cmds.polySphere()[0])
-loc = cmdWrapper.getNode(cmds.spaceLocator()[0])
+sphere = getNode(cmds.polySphere()[0])
+loc = getNode(cmds.spaceLocator()[0])
 loc.translate.connect(sphere.translate)
 ```
 
