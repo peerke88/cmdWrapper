@@ -317,6 +317,10 @@ class DependNode(object):
     _MFnDependencyNode = MFnDependencyNode()  # I don't want to create new objects every time we get the name
     _apiObjectHelper = _oldMSelectionList()
 
+    @staticmethod
+    def fnInstance():
+        return DependNode._MFnDependencyNode
+
     @classmethod
     def pool(cls, nodeName, nodeType):
         # Using internal Maya cmds to avoid recursive calls (wrapped cmds.ls() constructs DependNode objects when necessary)
@@ -438,9 +442,7 @@ class DagNode(DependNode):
 class Transform(DagNode):
     # Note the base class implements __setattr__, so we should not introduce new member variables, only functions.
     def shape(self):
-        c = cmds.listRelatives(self._nodeName, c=True, f=True, type='shape') or []
-        if c:
-            return wrapNode(c[0])
+        return (cmds.listRelatives(self._nodeName, c=True, f=True, type='shape') or [None])[0]
 
     def shapes(self):
         return cmds.listRelatives(self._nodeName, c=True, f=True, type='shape') or []
@@ -513,12 +515,12 @@ _wrapperTypes = {
 
 
 def wrapNode(nodeName):
-    if '.' in nodeName:
-        nodeName, suffix = nodeName.split('.', 1)[0]
+    if isinstance(nodeName, basestring) and '.' in nodeName:
+        nodeName, suffix = nodeName.split('.', 1)
         result = wrapNode(nodeName)
         if result is None:
             return None
-        return getattr(node, suffix)
+        return getattr(result, suffix)
     if not cmds.objExists(nodeName):
         return None
     nodeType = _cmds.nodeType(nodeName)
@@ -539,15 +541,17 @@ def createNode(nodeType):
 
     # Api with undo/redo support:
     # It is untested if this is faster or slower
+    # TODO: profile!
     try:
         mod = MDGModifier()
         obj = mod.createNode(nodeType)
+    # noinspection PyBroadException
     except:
         mod = MDagModifier()
         obj = mod.createNode(nodeType)
     mod.doIt()
-    DependNode._MFnDependencyNode.setObject(obj)
-    node = DependNode._MFnDependencyNode.name()
+    DependNode.fnInstance().setObject(obj)
+    node = DependNode.fnInstance().name()
     return wrapNode(node)
 
 
@@ -635,6 +639,14 @@ if __name__ == '__main__':
         if a != b:
             print('Error: (%s) != (%s)' % (a, b))
 
+    def validate_as_strs(a, b):
+        if len(a) != len(b):
+            print('Error: (%s) != (%s)' % (a, b))
+            return
+        for ae, be in zip(a, b):
+            if str(ae) != str(be):
+                print('Error: (%s) != (%s)' % (a, b))
+                return
 
     def validate_floats(a, b):
         if len(a) != len(b):
@@ -657,6 +669,7 @@ if __name__ == '__main__':
         validate(transform.tx(), 0.0)
         validate(transform.translate.get(), (0.0, 0.0, 0.0))
         transform.translate = 10.0, 1.0, 0.0
+        # noinspection PyCallingNonCallable
         validate(transform.translate(), (10.0, 1.0, 0.0))
         transform.tx.set(2.0)
         validate(transform.tx(), 2.0)
@@ -693,6 +706,8 @@ if __name__ == '__main__':
         validate(allDescendants('|joint1'), set(getNode(('|joint1|joint2', '|joint1|joint2|joint3'))))
         for inst in cmds.ls(sl=0)[::5]:
             assert isinstance(inst, DependNode)
+        crc = cmds.circle()[0]
+        validate_as_strs(cmds.ls('%s[*]' % crc.cv, fl=True), getNode(['|nurbsCircle1.cv[%i]' % i for i in range(8)]))
 
 
     tests()
