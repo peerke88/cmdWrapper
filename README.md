@@ -1,6 +1,6 @@
 # cmd wrapper
 
-simple wrapper for maya cmds and OpenMaya (api2.0) functionality
+A simple & light-wight wrapper for maya cmds and OpenMaya (api2.0) functionality
 
 
 ## Authors
@@ -18,36 +18,45 @@ simple wrapper for maya cmds and OpenMaya (api2.0) functionality
 
 ## launch
 
-place cmdWrapper folder with the '__init__.py' in the mydocuments/maya/scripts folder
-```python
-import cmdWrapper
-```
-
-the following functions are for creating a new wrapped transform node node:
+Place the cmdWrapper folder with the '__init__.py' in the Documents/maya/scripts folder to install it for all Maya versions.
+(On Windows you can go copy %USERPROFILE%/Documents/maya/scripts into the explorer address bar to get there) 
 
 ```python
-import cmdWrapper
-trs = cmdWrapper.createNode("transform")
+from cmdWrapper import cmds
 ```
 
-or to get the node out of a current scene:
-(returns the selected items, or name / list of strings can be given to return as wrapped nodes)
+Create a new (wrapped) transform node node:
 
 ```python
-import cmdWrapper
-nodes = cmdWrapper.getNode()
+from cmdWrapper import cmds
+transform = cmds.createNode("transform")
 ```
-attributes can be used as python attributes directly and will return wrapped math functions
+
+Get the selection from the current scene (as wrapped nodes):
+
+```python
+from cmdWrapper import cmds, getNode
+nodes = getNode()
+```
+
+Specify which node name(s) you would like to wrap (can give it 1 node name or a list of strings):
+
+```python
+from cmdWrapper import cmds, getNode
+nodes = getNode('persp')
+```
+
+Attributes can be used as python attributes directly and will return wrapped math functions:
 
 ```python
 from cmdWrapper import createNode
 node = createNode("transform")
 #matrix function
-mat = node.worldMatrix[0].get()
+mat = node.worldMatrix[0]() # alternatively use: node.worldMatrix[0].get()
 # vector function
-pos = node.translate.get()
+pos = node.translate() # alternatively use: node.translate.get()
 pos.normal() # example vector operation
-node.translate.set(pos)
+node.translate = pos # alternatively use: node.translate.set(pos)
 ```
 
 connection works as follows: 
@@ -62,7 +71,7 @@ loc.translate.connect(sphere.translate)
 
 ---
 
-# instead of maya.cmds
+# Use cmdsWrapper.cds instead of maya.cmds
 ```python
 from maya import cmds
 
@@ -71,12 +80,13 @@ sphere = cmds.polySphere()[0]
 cmds.connectAttr("{0}.translate".format(loc), "{0}.translate".format(sphere))
 trsValue = cmds.getAttr("{0}.translate".format(loc))
 ```
-now becomes:
+
+This becomes:
 ```python
 from cmdWrapper import cmds
 
 loc = cmds.spaceLocator()[0]
 sphere = cmds.polySphere()[0]
 loc.translate.connect(sphere.translate)
-trsValue = loc.translate.get()
+trsValue = loc.translate()
 ```
