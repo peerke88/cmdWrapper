@@ -51,19 +51,27 @@ from cmdWrapper import cmds, getNode
 nodes = getNode('persp')
 ```
 
-Attributes can be used as python attributes directly and will return wrapped math functions:
+Attributes can be used as python attributes directly:
 
 ```python
 from cmdWrapper import createNode
 node = createNode("transform")
-#matrix function
 mat = node.worldMatrix[0]() # alternatively use: node.worldMatrix[0].get()
 # vector function
 pos = node.translate() # alternatively use: node.translate.get()
 node.translate = pos # alternatively use: node.translate.set(pos)
 ```
 
-connection works as follows: 
+Or as math-wrapped attributes:
+```python
+from cmdWrapper import createNode
+node = createNode("transform")
+pos = node.getT() # returns an MVector
+pos.normalize()
+node.translate.setT(pos) # must set MVector explicitly (we are aware that this has room for improvement)
+```
+
+Connecting works as follows: 
 
 ```python
 from cmdWrapper import cmds, getNode
@@ -86,6 +94,7 @@ trsValue = cmds.getAttr("{0}.translate".format(loc))
 ```
 
 This becomes:
+
 ```python
 from cmdWrapper import cmds
 
