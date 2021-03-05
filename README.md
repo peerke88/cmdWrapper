@@ -16,9 +16,14 @@ A simple & light-wight wrapper for maya cmds and OpenMaya (api2.0) functionality
  - Python 2.7 (3.7)
 ```
 
+## Todo:
+
+- convert attribute values to correct OpenMaya type
+
+
 ## launch
 
-Place the cmdWrapper folder with the '__init__.py' in the Documents/maya/scripts folder to install it for all Maya versions.
+Place the cmdWrapper folder with the ```'__init__.py'``` in the Documents/maya/scripts folder to install it for all Maya versions.
 (On Windows you can go copy %USERPROFILE%/Documents/maya/scripts into the explorer address bar to get there) 
 
 ```python
@@ -55,7 +60,6 @@ node = createNode("transform")
 mat = node.worldMatrix[0]() # alternatively use: node.worldMatrix[0].get()
 # vector function
 pos = node.translate() # alternatively use: node.translate.get()
-pos.normal() # example vector operation
 node.translate = pos # alternatively use: node.translate.set(pos)
 ```
 
@@ -71,7 +75,7 @@ loc.translate.connect(sphere.translate)
 
 ---
 
-# Use cmdsWrapper.cds instead of maya.cmds
+# Use cmdsWrapper.cmds instead of maya.cmds
 ```python
 from maya import cmds
 
