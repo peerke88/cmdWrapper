@@ -513,6 +513,12 @@ _wrapperTypes = {
 
 
 def wrapNode(nodeName):
+    if '.' in nodeName:
+        nodeName, suffix = nodeName.split('.', 1)[0]
+        result = wrapNode(nodeName)
+        if result is None:
+            return None
+        return getattr(node, suffix)
     if not cmds.objExists(nodeName):
         return None
     nodeType = _cmds.nodeType(nodeName)
