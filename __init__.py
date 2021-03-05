@@ -28,10 +28,15 @@ Thin wrapper around Maya API & cmds to make interacting with nodes more convenie
 Read more over at https://github.com/peerke88/cmdWrapper
 """
 
+if __name__ == '__main__':
+    from maya import standalone
+
+    standalone.initialize(name='python')
+
 from math import degrees
 from maya import cmds as _cmds
 from maya.api.OpenMaya import MMatrix, MVector, MTransformationMatrix, MGlobal, \
-    MFnTypedAttribute, MDagPath, MFnDependencyNode, MFnDependencyNode
+    MFnTypedAttribute, MDagPath, MFnDependencyNode, MDGModifier, MDagModifier, MObject
 import warnings
 
 from maya.OpenMaya import MSelectionList as _oldMSelectionList
@@ -64,14 +69,18 @@ class _Cmd(object):
         for k, a in kwargs.iteritems():
             if isinstance(a, (_Attribute, DependNode)):
                 kwargs[k] = unwrap(a)
-        
+        return_value = self.fn(*args, **kwargs)
 
-        _func = self.fn(*args, **kwargs) 
-        if _isStringOrStringList(_func): 
-            _func = getNode(_func) 
-        return _func 
- 
-        # return self.fn(*args, **kwargs)
+        # wrap return value if it is a list of nodes
+        if _isStringOrStringList(return_value):
+            # we return the original value in case the wrapper is None,
+            # this can happen when maya returns a str or str[] that does not represent nodes
+            tmp = getNode(return_value)
+            if tmp is None or (isinstance(tmp, (list, tuple)) and set(tmp) == {None}):
+                return return_value
+            return_value = tmp
+
+        return return_value
 
 
 class _Cmds(object):
@@ -143,7 +152,7 @@ class _Attribute(object):
         self._setterKwargs = {}
 
         try:
-            t = _cmds.getAttr(str(self._path), type=True)
+            t = cmds.getAttr(str(self._path), type=True)
         # noinspection PyBroadException
         except:
             if _debug:
@@ -198,19 +207,19 @@ class _Attribute(object):
         self[index].set(value)
 
     def numElements(self):
-        return _cmds.getAttr(self._path, size=True)
+        return cmds.getAttr(self._path, size=True)
 
     def name(self):
         return self._path.split('.', 1)[-1]
 
     def isKeyable(self):
-        return _cmds.getAttr(self._path, keyable=True)
+        return cmds.getAttr(self._path, keyable=True)
 
     def isProxy(self):
-        return _cmds.getAttr(self._path, keyable=True)
+        return cmds.getAttr(self._path, keyable=True)
 
     def isDestination(self):
-        return bool(_cmds.listConnections(self._path, s=True, d=False))
+        return bool(cmds.listConnections(self._path, s=True, d=False))
 
     def __str__(self):
         return self._path  # so we can easily throw Attribute() objects into maya functions
@@ -219,30 +228,34 @@ class _Attribute(object):
         return self._path + ' : ' + self.__class__.__name__  # so we can easily throw Attribute() objects into maya functions
 
     def connect(self, destination):
-        _cmds.connectAttr(self._path, str(destination), force=True)
+        cmds.connectAttr(self._path, str(destination), force=True)
 
     def disconnectInputs(self):
         for source in self.connections(s=True, d=False):
-            _cmds.disconnectAttr(str(source), self._path)
+            cmds.disconnectAttr(str(source), self._path)
 
     def disconnect(self, destination):
-        _cmds.disconnectAttr(self._path, str(destination))
+        cmds.disconnectAttr(self._path, str(destination))
 
     def connections(self, s=True, d=True, asNode=False):
-        return [_Attribute(at) for at in _cmds.listConnections(self._path, s=s, d=d, p=not asNode, sh=True) or []]
+        return [_Attribute(at) for at in cmds.listConnections(self._path, s=s, d=d, p=not asNode, sh=True) or []]
 
     def isConnected(self):
-        return bool(_cmds.listConnections(self._path, s=True, d=True))
+        return bool(cmds.listConnections(self._path, s=True, d=True))
 
     def get(self):
-        return _cmds.getAttr(self._path)
+        ret = cmds.getAttr(self._path)
+        # hacky solution around maya transform attributes returning a list of 1 tuple
+        if isinstance(ret, list) and len(ret) == 1 and isinstance(ret[0], tuple):
+            return ret[0]
+        return cmds.getAttr(self._path)
 
     def set(self, *args, **kwargs):
         assert args
         if len(args) == 1 and hasattr(args[0], '__iter__') and not isinstance(args[0], basestring):
             args = tuple(args[0])
         kwargs.update(self._setterKwargs)
-        _cmds.setAttr(self._path, *args, **kwargs)
+        cmds.setAttr(self._path, *args, **kwargs)
 
     def _recurse(self):
         stack = [self._path]
@@ -252,7 +265,7 @@ class _Attribute(object):
             cursor += 1
             nodeName, attributeName = item.split('.', 1)
             try:
-                childAttributeNames = _cmds.attributeQuery(attributeName, node=nodeName, lc=True)
+                childAttributeNames = cmds.attributeQuery(attributeName, node=nodeName, lc=True)
             except RuntimeError:
                 childAttributeNames = None
             if childAttributeNames:
@@ -268,21 +281,21 @@ class _Attribute(object):
             for attr in self._recurse():
                 attr.setLocked(lock, False)
                 return
-        _cmds.setAttr(self._path, lock=lock)
+        cmds.setAttr(self._path, lock=lock)
 
     def setKeyable(self, keyable, leaf=False):
         if leaf:
             for attr in self._recurse():
                 attr.setKeyable(keyable, False)
                 return
-        _cmds.setAttr(self._path, keyable=keyable)
+        cmds.setAttr(self._path, keyable=keyable)
 
     def setChannelBox(self, cb, leaf=False):
         if leaf:
             for attr in self._recurse():
                 attr.setChannelBox(cb, False)
                 return
-        _cmds.setAttr(self._path, channelBox=cb)
+        cmds.setAttr(self._path, channelBox=cb)
 
 
 class DependNode(object):
@@ -303,6 +316,7 @@ class DependNode(object):
 
     @classmethod
     def pool(cls, nodeName, nodeType):
+        # Using internal Maya cmds to avoid recursive calls (wrapped cmds.ls() constructs DependNode objects when necessary)
         key = _cmds.ls(nodeName, uuid=True)[0]
         inst = DependNode._instances.get(key, None)
         if inst is None:
@@ -313,6 +327,7 @@ class DependNode(object):
     def __init__(self, nodeName, nodeType):
         assert isinstance(nodeName, basestring)
         self.__type = nodeType
+        # Using internal Maya cmds to avoid recursive calls (wrapped cmds.ls() constructs DependNode objects when necessary)
         if _cmds.ls(nodeName, l=True)[0][0] == '|':
             self.__handle = _getMDagPath(nodeName)
             assert self.__handle.isValid()
@@ -326,7 +341,7 @@ class DependNode(object):
         return o
 
     def delete(self):
-        _cmds.delete(self._nodeName)
+        cmds.delete(self._nodeName)
 
     def name(self):
         return self._nodeName.rsplit('|', 1)[-1]
@@ -339,10 +354,10 @@ class DependNode(object):
         return self._MFnDependencyNode.name()
 
     def rename(self, newName):
-        _cmds.rename(self._nodeName, newName)
+        cmds.rename(self._nodeName, newName)
 
     def hasAttr(self, attr):
-        return _cmds.objExists(self._nodeName + '.' + attr)
+        return cmds.objExists(self._nodeName + '.' + attr)
 
     def __getattr__(self, attr):
         return _Attribute(self._nodeName + '.' + attr)
@@ -389,10 +404,10 @@ class DependNode(object):
                 kwargs['dt'] = t
             else:
                 kwargs['at'] = t
-        _cmds.addAttr(self._nodeName, ln=longName, **kwargs)
+        cmds.addAttr(self._nodeName, ln=longName, **kwargs)
 
     def plugs(self, ud=False):
-        return [_Attribute(self._nodeName + '.' + attr) for attr in _cmds.listAttr(self._nodeName, ud=ud)]
+        return [_Attribute(self._nodeName + '.' + attr) for attr in cmds.listAttr(self._nodeName, ud=ud)]
 
     def isShape(self):
         return self.__type in ['nurbsCurve', 'nurbsSurface', 'mesh', 'follicle', 'RigSystemControl',
@@ -408,29 +423,29 @@ class DagNode(DependNode):
 
     def setParent(self, parent, shape=False):
         if shape:
-            _cmds.parent(self._nodeName, parent, add=True, s=True)
+            cmds.parent(self._nodeName, parent, add=True, s=True)
             return
-        _cmds.parent(self._nodeName, parent)
+        cmds.parent(self._nodeName, parent)
 
 
 class Transform(DagNode):
     # Note the base class implements __setattr__, so we should not introduce new member variables, only functions.
     def shape(self):
-        c = _cmds.listRelatives(self._nodeName, c=True, f=True, type='shape') or []
+        c = cmds.listRelatives(self._nodeName, c=True, f=True, type='shape') or []
         if c:
             return wrapNode(c[0])
 
     def shapes(self):
-        return [wrapNode(c) for c in (_cmds.listRelatives(self._nodeName, c=True, f=True, type='shape') or [])]
+        return [wrapNode(c) for c in (cmds.listRelatives(self._nodeName, c=True, f=True, type='shape') or [])]
 
     def _children(self):
-        return _cmds.listRelatives(self._nodeName, c=True, f=True) or []
+        return cmds.listRelatives(self._nodeName, c=True, f=True) or []
 
     def children(self):
         return [wrapNode(child) for child in self._children()]
 
     def allDescendants(self):
-        return [wrapNode(child) for child in _cmds.listRelatives(self._nodeName, ad=True, f=True)]
+        return [wrapNode(child) for child in cmds.listRelatives(self._nodeName, ad=True, f=True)]
 
     def numChildren(self):
         return len(self._children())
@@ -439,31 +454,31 @@ class Transform(DagNode):
         return wrapNode(self._children()[index])
 
     def getT(self, ws=False):
-        return MVector(*_cmds.xform(self._nodeName, q=True, ws=ws, t=True))
+        return MVector(*cmds.xform(self._nodeName, q=True, ws=ws, t=True))
 
     def getM(self, ws=False):
-        return Matrix(_cmds.xform(self._nodeName, q=True, ws=ws, m=True))
+        return Matrix(cmds.xform(self._nodeName, q=True, ws=ws, m=True))
 
     def setT(self, t, ws=False):
-        return _cmds.xform(self._nodeName, ws=ws, t=(t[0], t[1], t[2]))
+        return cmds.xform(self._nodeName, ws=ws, t=(t[0], t[1], t[2]))
 
     def setM(self, m, ws=False):
-        return _cmds.xform(self._nodeName, ws=ws, m=[m[i] for i in xrange(16)])
+        return cmds.xform(self._nodeName, ws=ws, m=[m[i] for i in xrange(16)])
 
 
 class Joint(Transform):
     # Note the base class implements __setattr__, so we should not introduce new member variables, only functions.
     def setJointOrientMatrix(self, m, ws=False):
         if ws:
-            parentInverseMatrix = _cmds.getAttr(self._nodeName + '.parentInverseMatrix')
+            parentInverseMatrix = cmds.getAttr(self._nodeName + '.parentInverseMatrix')
         else:
-            s = _cmds.getAttr(self._nodeName + '.is')
+            s = cmds.getAttr(self._nodeName + '.is')
             parentInverseMatrix = [s[0], 0.0, 0.0, 0.0,
                                    0.0, s[1], 0.0, 0.0,
                                    0.0, 0.0, s[2], 0.0,
                                    0.0, 0.0, 0.0, 1.0]
         m *= Matrix(parentInverseMatrix)
-        _cmds.setAttr(self._nodeName + '.jointOrient', *m.asDegrees(), type='double3')
+        cmds.setAttr(self._nodeName + '.jointOrient', *m.asDegrees(), type='double3')
 
 
 class Shape(DagNode):
@@ -491,19 +506,36 @@ _wrapperTypes = {
 
 
 def wrapNode(nodeName):
-    if not _cmds.objExists(nodeName):
-        return nodeName
+    if not cmds.objExists(nodeName):
+        return None
     nodeType = _cmds.nodeType(nodeName)
     return _wrapperTypes.get(nodeType, DependNode).pool(nodeName, nodeType)
 
 
 def createNode(nodeType):
-    # note: this is the older version:
-    #      return wrapNode(_cmds.createNode(nodeType))
-    # it's replaced because OpenMaya is slightly faster, making gains in speed on big rig creations
-    node = MFnDependencyNode()
-    node.create(nodeType)
-    return wrapNode(node.name())
+    # Cmds:
+    # node = cmds.createNode(nodeType)
+    # return wrapNode(node)
+
+    # Api:
+    # This one is much faster
+    # node = MFnDependencyNode()
+    # node.create(nodeType)
+    # node = node.name()
+    # return wrapNode(node)
+
+    # Api with undo/redo support:
+    # It is untested if this is faster or slower
+    try:
+        mod = MDGModifier()
+        obj = mod.createNode(nodeType)
+    except:
+        mod = MDagModifier()
+        obj = mod.createNode(nodeType)
+    mod.doIt()
+    DependNode._MFnDependencyNode.setObject(obj)
+    node = DependNode._MFnDependencyNode.name()
+    return wrapNode(node)
 
 
 def _isStringOrStringList(inObject):
@@ -518,7 +550,7 @@ def _isStringOrStringList(inObject):
 
 def getNode(nodeName=None):
     if nodeName is None:
-        curSelection = _cmds.ls(sl=True)
+        curSelection = cmds.ls(sl=True)
         if not curSelection:
             warnings.warn('no nodeName given and no object selected in maya!')
             return []
@@ -529,7 +561,7 @@ def getNode(nodeName=None):
     if isinstance(nodeName, (str, unicode, bytes)):
         nodeNames = [nodeName]
         _singleNode = True
-    elif isinstance(nodeName, _oldMObject):
+    elif isinstance(nodeName, MObject):  # _oldMObject):
         nodeFn = OpenMaya.MFnDependencyNode(nodeName)
         nodeNames = [nodeFn.name()]
         _singleNode = True
@@ -585,37 +617,63 @@ def descendants(nodeList):
 
 if __name__ == '__main__':
     # do some tests
+    def validate(a, b):
+        if a != b:
+            print('Error: (%s) != (%s)' % (a, b))
+
+
+    def validate_floats(a, b):
+        if len(a) != len(b):
+            print('Error: (%s) != (%s)' % (a, b))
+            return
+        epsilon = 1e-9
+        for ae, be in zip(a, b):
+            if abs(ae - be) > epsilon:
+                print('Error: (%s) != (%s)' % (a, b))
+                return
+
+
     def tests():
         print('Running tests.')
         print('Initializing maya standalone, make sure to run using mayapy.exe.')
-        from maya import standalone
-        standalone.initialize(name='python')
+        # create a nod
         transform = createNode('transform')
+        validate(str(transform), '|transform1')
+        # get and set translate
+        validate(transform.tx(), 0.0)
+        validate(transform.translate.get(), (0.0, 0.0, 0.0))
+        transform.translate = 10.0, 1.0, 0.0
+        validate(transform.translate(), (10.0, 1.0, 0.0))
+        transform.tx.set(2.0)
+        validate(transform.tx(), 2.0)
+        # find a node & it's shape
         persp_transform = getNode('persp')
         persp_shape = persp_transform.shape()
-        print(persp_shape)
+        validate(str(persp_shape), '|persp|perspShape')
+        # reparent a node
         transform.setParent(persp_transform)
-        print(transform)
-        print(transform.parent())
-        print(transform.translate)
-        print(transform.tx())
-        print(transform.translate.get())
-        transform.translate = 10.0, 1.0, 0.0
-        transform.tx.set(2)
-        print(transform.translate())
-        print(transform.tx())
-        print("====== maya cmds type information: ======\n")
-        print("should be None: \n{}\n".format(cmds.listRelatives(transform, ad=1)))
-        print("should be list of 3 floats: \n{}\n".format(cmds.xform(transform, q=1, ws=1, t=1)))
-        print("should be list of 16 floats: \n{}\n".format(cmds.xform(transform, q=1, ws=1, m=1)))
-        print("should be string 'C:/Test.ma': \n{}\n".format(cmds.file(rename='C:/Test.ma')))
-        print("should be string 'C:/Test.ma': \n{}\n".format(cmds.file(q=True, sn=True)))
-        print("should be list ['C:/Test.ma']: \n{}\n".format(cmds.file( query=True, list=True )))
-        print("should be list of strings with 'scale': \n{}\n".format(cmds.listAttr(transform, r=1, st = "scale*")))
-        print("should be 'True': \n{}\n".format(cmds.objExists(transform)))
-        print("should be <class '__main__.DependNode'>: \n{}\n".format(type(cmds.createNode("curveInfo"))))
-        print("should be list of 2 wrapped objects: \n{}\n".format(cmds.circle(n="test")))
-        print("should be 'untitled': \n{}\n".format(cmds.file(f=True, new=True)))
-        print("should be 'y' or 'z': \n{}\n".format(cmds.upAxis(q=1, axis=True)))
-        print("should be list of several wrapped objects: \n{}\n".format(cmds.ls(sl=0)[::5]))
+        validate(str(transform), '|persp|transform1')
+        validate(transform.parent(), persp_transform)
+        # even attributes should still work
+        validate(str(transform.translate), '|persp|transform1.translate')
+        # cmds return type validation
+        validate(cmds.listRelatives(transform, ad=True), None)
+        validate_floats(cmds.xform(transform, q=True, ws=True, t=True), (2.0, 1.0, 0.0))
+        validate_floats(cmds.xform(transform, q=True, ws=True, m=True),
+                        (1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 2.0, 1.0, 0.0, 1.0))
+        validate(cmds.file(rename='C:/Test.ma'), 'C:/Test.ma')
+        validate('C:/Test.ma', cmds.file(q=True, sn=True))
+        validate(['C:/Test.ma'], cmds.file(query=True, list=True))
+        validate(['scale', 'scaleX', 'scaleY', 'scaleZ', 'scalePivot', 'scalePivotX', 'scalePivotY', 'scalePivotZ',
+                  'scalePivotTranslate', 'scalePivotTranslateX', 'scalePivotTranslateY', 'scalePivotTranslateZ'],
+                 cmds.listAttr(transform, r=True, st='scale*'))
+        validate(True, cmds.objExists(transform))
+        validate(DependNode, type(cmds.createNode('curveInfo')))
+        validate(['|test', 'makeNurbCircle1'], [str(e) for e in cmds.circle(n='test')])
+        validate('untitled', cmds.file(f=True, new=True))
+        validate('y' or 'z', cmds.upAxis(q=True, axis=True))
+        for inst in cmds.ls(sl=0)[::5]:
+            assert isinstance(inst, DependNode)
+
+
     tests()
