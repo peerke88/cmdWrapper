@@ -188,7 +188,10 @@ class _Attribute(object):
                  'lattice'):
             self._setterKwargs['type'] = t
 
-    def __call__(self):
+    def __call__(self, *args):
+        if args:
+            raise AttributeError('Attempting to get an attribute %s, but you are passing attributes into the getter.'
+                                 'Are you trying to call a function and misspelled something?' % self)
         return self.get()
 
     def __getattr__(self, item):
