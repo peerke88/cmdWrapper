@@ -582,37 +582,32 @@ def selection():
     return getNode()
 
 
-def parents(nodeList):
-    unique_parents = []
-    for node in wrapNode(nodeList):
+def _iter_transforms(nodeList):
+    if not hasattr(nodeList, '__iter__'):
+        nodeList = [nodeList]
+    for node in nodeList:
+        node = wrapNode(node)
         if not isinstance(node, Transform):
             continue
-        parent = node.parent()
-        if parent not in unique_parents:
-            unique_parents.append(parent)
-    return unique_parents
+        yield node
+
+
+def parents(nodeList):
+    return list({node.parent() for node in _iter_transforms(nodeList)})
 
 
 def children(nodeList):
-    unique_children = []
-    for node in wrapNode(nodeList):
-        if not isinstance(node, Transform):
-            continue
-        for child in node.children():
-            if child not in unique_children:
-                unique_children.append(child)
+    unique_children = set()
+    for node in _iter_transforms(nodeList):
+        unique_children |= set(node.children())
     return unique_children
 
 
 def descendants(nodeList):
-    unique_parents = []
-    for node in wrapNode(nodeList):
-        if not isinstance(node, Transform):
-            continue
-        for child in node.allDescendants():
-            if child not in unique_children:
-                unique_children.append(child)
-    return unique_parents
+    unique_children = set()
+    for node in _iter_transforms(nodeList):
+        unique_children |= set(node.allDescendants())
+    return unique_children
 
 
 if __name__ == '__main__':
