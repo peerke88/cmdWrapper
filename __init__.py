@@ -498,7 +498,7 @@ _wrapperTypes = {
     'follicle': Shape,
     'RigSystemControl': Shape,
     'distanceDimShape': Shape,
-    'locator': DagNode,
+    'locator': Shape,
     'cMuscleKeepOut': Shape,
     'cMuscleObject': Shape,
     'camera': Shape,

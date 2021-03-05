@@ -18,7 +18,7 @@ simple wrapper for maya cmds and OpenMaya (api2.0) functionality
 
 ## launch
 
-place cmdWrapper folder in the mydocuments/maya/scripts folder
+place cmdWrapper folder with the '__init__.py' in the mydocuments/maya/scripts folder
 ```python
 import cmdWrapper
 ```
@@ -54,9 +54,30 @@ connection works as follows:
 
 ```python
 import cmdWrapper
+from cmdWrapper import cmds
 # maya commands can be accessed from here as well
-sphere = cmdWrapper.getNode(cmdWrapper.cmds.polySphere()[0])
-loc = cmdWrapper.getNode(cmdWrapper.cmds.spaceLocator()[0])
+sphere = cmdWrapper.getNode(cmds.polySphere()[0])
+loc = cmdWrapper.getNode(cmds.spaceLocator()[0])
 loc.translate.connect(sphere.translate)
 ```
 
+---
+
+# instead of maya.cmds
+```python
+from maya import cmds
+
+loc = cmds.spaceLocator()[0]
+sphere = cmds.polySphere()[0]
+cmds.connectAttr("{0}.translate".format(loc), "{0}.translate".format(sphere))
+trsValue = cmds.getAttr("{0}.translate".format(loc))
+```
+now becomes:
+```python
+from cmdWrapper import cmds
+
+loc = cmds.spaceLocator()[0]
+sphere = cmds.polySphere()[0]
+loc.translate.connect(sphere.translate)
+trsValue = loc.translate.get()
+```
