@@ -334,7 +334,11 @@ class DependNode(object):
         else:
             self.__handle = _getMObject(nodeName)
 
+    def __len__(self):
+        return len(str(self))
+
     def __apiobject__(self):
+        assert cmds.objExists(self._nodeName)
         _oldMGlobal.getSelectionListByName(self._nodeName, self._apiObjectHelper)
         o = _oldMObject()
         self._apiObjectHelper.getDependNode(0, o)
@@ -436,16 +440,16 @@ class Transform(DagNode):
             return wrapNode(c[0])
 
     def shapes(self):
-        return [wrapNode(c) for c in (cmds.listRelatives(self._nodeName, c=True, f=True, type='shape') or [])]
+        return cmds.listRelatives(self._nodeName, c=True, f=True, type='shape') or []
 
     def _children(self):
-        return cmds.listRelatives(self._nodeName, c=True, f=True) or []
+        return _cmds.listRelatives(self._nodeName, c=True, f=True) or []
 
     def children(self):
-        return [wrapNode(child) for child in self._children()]
+        return cmds.listRelatives(self._nodeName, c=True, f=True) or []
 
     def allDescendants(self):
-        return [wrapNode(child) for child in cmds.listRelatives(self._nodeName, ad=True, f=True)]
+        return cmds.listRelatives(self._nodeName, ad=True, f=True) or []
 
     def numChildren(self):
         return len(self._children())
@@ -582,37 +586,38 @@ def selection():
     return getNode()
 
 
-def parents(nodeList):
-    unique_parents = []
-    for node in wrapNode(nodeList):
+def _iter_transforms(nodeList):
+    if not isinstance(nodeList, (list, tuple)):
+        nodeList = [nodeList]
+    for node in nodeList:
+        node = wrapNode(node)
         if not isinstance(node, Transform):
             continue
-        parent = node.parent()
-        if parent not in unique_parents:
-            unique_parents.append(parent)
-    return unique_parents
+        yield node
+
+
+def parents(nodeList):
+    return list({node.parent() for node in _iter_transforms(nodeList)})
 
 
 def children(nodeList):
-    unique_children = []
-    for node in wrapNode(nodeList):
-        if not isinstance(node, Transform):
-            continue
-        for child in node.children():
-            if child not in unique_children:
-                unique_children.append(child)
+    unique_children = set()
+    for node in _iter_transforms(nodeList):
+        for ch in node.children():
+            unique_children.add(ch)
     return unique_children
+    #     unique_children |= set(node.children())
+    # return sorted(list(unique_children), key=len)
 
 
-def descendants(nodeList):
-    unique_parents = []
-    for node in wrapNode(nodeList):
-        if not isinstance(node, Transform):
-            continue
-        for child in node.allDescendants():
-            if child not in unique_children:
-                unique_children.append(child)
-    return unique_parents
+def allDescendants(nodeList):
+    unique_children = set()
+    for node in _iter_transforms(nodeList):
+        for ch in node.allDescendants():
+            unique_children.add(ch)
+    return unique_children
+    #    unique_children |= set(node.allDescendants())
+    # return sorted(list(unique_children), key=len)
 
 
 if __name__ == '__main__':
@@ -672,6 +677,11 @@ if __name__ == '__main__':
         validate(['|test', 'makeNurbCircle1'], [str(e) for e in cmds.circle(n='test')])
         validate('untitled', cmds.file(f=True, new=True))
         validate('y' or 'z', cmds.upAxis(q=True, axis=True))
+        cmds.joint()
+        cmds.joint()
+        cmds.joint()
+        validate(children('|joint1'), {getNode('|joint1|joint2')})
+        validate(allDescendants('|joint1'), set(getNode(('|joint1|joint2', '|joint1|joint2|joint3'))))
         for inst in cmds.ls(sl=0)[::5]:
             assert isinstance(inst, DependNode)
 
