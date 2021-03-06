@@ -131,6 +131,133 @@ class Matrix(MMatrix):
     def rotation(self):
         return MTransformationMatrix(self).rotation()
 
+    def __repr__(self):
+        return '[%s] : %s' % (', '.join(str(self[i]) for i in range(16)), self.__class__.__name__)
+
+    def __getitem__(self, index):
+        if isinstance(index, slice):
+            a = 0 if index.start is None else index.start
+            b = len(self) if index.stop is None else index.stop
+            c = 1 if index.step is None else index.step
+            return list(super(Matrix, self).__getitem__(i) for i in range(a, b, c))
+        return super(Matrix, self).__getitem__(index)
+
+    def __setitem__(self, index, value):
+        if isinstance(index, slice):
+            a = 0 if index.start is None else index.start
+            b = len(self) if index.stop is None else index.stop
+            c = 1 if index.step is None else index.step
+            list(super(Matrix, self).__setitem__(i) for i, v in zip(range(a, b, c), value))
+            return
+        super(Matrix, self).__setitem__(index, value)
+
+    def __iter__(self):
+        for i in xrange(len(self)):
+            yield self[i]
+
+
+class Vector(MVector):
+    def __repr__(self):
+        return '[%s] : %s' % (', '.join(str(self[i]) for i in range(3)), self.__class__.__name__)
+
+    def __getitem__(self, index):
+        if isinstance(index, slice):
+            a = 0 if index.start is None else index.start
+            b = len(self) if index.stop is None else index.stop
+            c = 1 if index.step is None else index.step
+            return list(super(Vector, self).__getitem__(i) for i in range(a, b, c))
+        return super(Vector, self).__getitem__(index)
+
+    def __setitem__(self, index, value):
+        if isinstance(index, slice):
+            a = 0 if index.start is None else index.start
+            b = len(self) if index.stop is None else index.stop
+            c = 1 if index.step is None else index.step
+            for i, v in zip(range(a, b, c), value):
+                super(Vector, self).__setitem__(i, v)
+            return
+        super(Vector, self).__setitem__(index, value)
+
+    def __iter__(self):
+        for i in xrange(len(self)):
+            yield self[i]
+            
+
+class Euler(MEulerRotation):
+    def asQuaternion(self): return QuaternionOrPoint(super(Euler, self).asQuaternion())
+    def asMatrix(self): return Matrix(super(Euler, self).asMatrix())
+    def asVector(self): return Vector(super(Euler, self).asVector())
+    
+    def __repr__(self):
+        return '[%s] %s : %s' % (', '.join(str(self[i]) for i in range(3)), self.order, self.__class__.__name__)
+
+    def __getitem__(self, index):
+        if isinstance(index, slice):
+            a = 0 if index.start is None else index.start
+            b = len(self) if index.stop is None else index.stop
+            c = 1 if index.step is None else index.step
+            return list(super(Vector, self).__getitem__(i) for i in range(a, b, c))
+        return super(Vector, self).__getitem__(index)
+
+    def __setitem__(self, index, value):
+        if isinstance(index, slice):
+            a = 0 if index.start is None else index.start
+            b = len(self) if index.stop is None else index.stop
+            c = 1 if index.step is None else index.step
+            for i, v in zip(range(a, b, c), value):
+                super(Vector, self).__setitem__(i, v)
+            return
+        super(Vector, self).__setitem__(index, value)
+   
+    def __iter__(self):
+        for i in xrange(len(self)):
+            yield self[i]
+
+
+class QuaternionOrPoint(MQuaternion):
+    # TODO: add MPoint functionality where missing from MQuaternion
+    def __repr__(self):
+        return '[%s] : %s' % (', '.join(str(self[i]) for i in range(4)), self.__class__.__name__)
+
+    def __getitem__(self, index):
+        if isinstance(index, slice):
+            a = 0 if index.start is None else index.start
+            b = len(self) if index.stop is None else index.stop
+            c = 1 if index.step is None else index.step
+            return list(super(QuaternionOrPoint, self).__getitem__(i) for i in range(a, b, c))
+        return super(QuaternionOrPoint, self).__getitem__(index)
+
+    def __setitem__(self, index, value):
+        if isinstance(index, slice):
+            a = 0 if index.start is None else index.start
+            b = len(self) if index.stop is None else index.stop
+            c = 1 if index.step is None else index.step
+            list(super(QuaternionOrPoint, self).__setitem__(i) for i, v in zip(range(a, b, c), value))
+            return
+        super(QuaternionOrPoint, self).__setitem__(index, value)
+
+    def __iter__(self):
+        for i in xrange(len(self)):
+            yield self[i]
+
+
+def _wrapMathObjects(value):
+    # This tries to wrap the value into a math object
+    # only does something if the value is a list or tuple containing
+    # a specific number of floats (and no other data)
+    if not isinstance(value, (list, tuple)):
+        return value
+    for e in value:
+        if not isinstance(e, float):
+            return value
+    if len(value) == 3:
+        return Vector(*value)
+    if len(value) == 4:
+        return QuaternionOrPoint(*value)
+    if len(value) == 16:
+        return Matrix(value)
+    return value
+
 
 class _Attribute(object):
     """
@@ -241,7 +368,7 @@ class _Attribute(object):
         cmds.disconnectAttr(self._path, str(destination))
 
     def connections(self, s=True, d=True, asNode=False):
-        return [_Attribute(at) for at in cmds.listConnections(self._path, s=s, d=d, p=not asNode, sh=True) or []]
+        return cmds.listConnections(self._path, s=s, d=d, p=not asNode, sh=True) or []
 
     def isConnected(self):
         return bool(cmds.listConnections(self._path, s=True, d=True))
@@ -250,8 +377,8 @@ class _Attribute(object):
         ret = cmds.getAttr(self._path)
         # hacky solution around maya transform attributes returning a list of 1 tuple
         if isinstance(ret, list) and len(ret) == 1 and isinstance(ret[0], tuple):
-            return ret[0]
-        return cmds.getAttr(self._path)
+            ret = ret[0]
+        return _wrapMathObjects(ret)
 
     def set(self, *args, **kwargs):
         assert args
@@ -299,6 +426,12 @@ class _Attribute(object):
                 attr.setChannelBox(cb, False)
                 return
         cmds.setAttr(self._path, channelBox=cb)
+
+
+class _Transform_Rotate_Attribute(_Attribute):
+    def get(self):
+        angles = cmds.getAttr(self._path)[0]
+        return Euler(angles[0], angles[1], angles[2], cmds.getAttr(self._path.split('.', 1)[0] + '.rotateOrder'))
 
 
 class DependNode(object):
@@ -473,6 +606,11 @@ class Transform(DagNode):
 
     def setM(self, m, ws=False):
         return cmds.xform(self._nodeName, ws=ws, m=[m[i] for i in xrange(16)])
+
+    def __getattr__(self, attr):
+        if attr == 'rotate':
+            return _Transform_Rotate_Attribute(self._nodeName + '.' + attr)
+        return _Attribute(self._nodeName + '.' + attr)
 
 
 class Joint(Transform):
