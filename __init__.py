@@ -241,7 +241,7 @@ class _Attribute(object):
         cmds.disconnectAttr(self._path, str(destination))
 
     def connections(self, s=True, d=True, asNode=False):
-        return [_Attribute(at) for at in cmds.listConnections(self._path, s=s, d=d, p=not asNode, sh=True) or []]
+        return cmds.listConnections(self._path, s=s, d=d, p=not asNode, sh=True) or []
 
     def isConnected(self):
         return bool(cmds.listConnections(self._path, s=True, d=True))
