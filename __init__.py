@@ -36,7 +36,7 @@ if __name__ == '__main__':
 from math import degrees
 from maya import cmds as _cmds
 from maya.api.OpenMaya import MMatrix, MVector, MTransformationMatrix, MGlobal, \
-    MFnTypedAttribute, MDagPath, MFnDependencyNode, MDGModifier, MDagModifier, MObject
+    MFnTypedAttribute, MDagPath, MFnDependencyNode, MDGModifier, MDagModifier, MObject, MEulerRotation, MAngle, MPoint, MQuaternion
 import warnings
 
 from maya.OpenMaya import MSelectionList as _oldMSelectionList
@@ -666,24 +666,11 @@ def wrapNode(nodeName):
 
 
 def createNode(nodeType):
-    # Cmds:
-    # node = cmds.createNode(nodeType)
-    # return wrapNode(node)
-
-    # Api:
-    # This one is much faster
-    # node = MFnDependencyNode()
-    # node.create(nodeType)
-    # node = node.name()
-    # return wrapNode(node)
-
-    # Api with undo/redo support:
-    # It is untested if this is faster or slower
-    # TODO: profile!
+    # Api with undo/redo support, we profiled this to be faster than cmds.createNode:
+    # noinspection PyBroadException
     try:
         mod = MDGModifier()
         obj = mod.createNode(nodeType)
-    # noinspection PyBroadException
     except:
         mod = MDagModifier()
         obj = mod.createNode(nodeType)
