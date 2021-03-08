@@ -1,8 +1,8 @@
-import unittest, os, sys, logging, cProfile
+import unittest, os, sys, logging, cProfile, random
 
 _basePath = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if not _basePath in sys.path:
-	sys.path.insert(0, _basePath)
+    sys.path.insert(0, _basePath)
 
 import maya.standalone
 
@@ -36,7 +36,7 @@ try:
 except:
     _canProfile = False
 
-from cmdWrapper import cmds
+from cmdWrapper import cmds, Vector
 
 cmds.loadPlugin('matrixNodes',qt=True)
 cmds.loadPlugin('quatNodes', qt=True)
@@ -92,8 +92,31 @@ class TestCmds(unittest.TestCase):
 
 
     def attributes(self):
-    	pass
-
+        nVec = (5*random.random(), 5*random.random(), 5*random.random())
+        loc1 = cmds.spaceLocator()[0]
+        loc1.translate = nVec
+        self.assertEqual(Vector(nVec), loc1.translate)
+        loc2 = cmds.spaceLocator()[0]
+        loc2.translate.set(-1.56, 2.603, .556)
+        vecA = loc1.translate()
+        self.assertEqual(loc1.translate, vecA)
+        vecB = loc2.translate.get()
+        vecA = vecA.normal()
+        vecB.normalize()
+        vecC = vecA ^ vecB
+        vecD = vecA.cross(vecB)
+        self.assertEqual(vecC, vecD)
+        loc = cmds.spaceLocator()[0]
+        loc.translate = vecC
+        
+        origMat = loc2.worldMatrix[0].get()
+        mat = loc1.worldMatrix[0]()
+        loc2.setM(mat)
+        loc2.setT(origMat[12:15])
+        self.assertEqual(Vector(origMat[12:15]), loc2.getT(ws=1))
+        mat.setT(vecC)
+        if cmds.about(v=1) > 2020:
+            loc2.offsetParentMatrix.set(mat)
 
 ## \~english testing context that will fire the unitTests but can be used in a cProfile argument
 def testctx():
@@ -120,8 +143,8 @@ def runctx(inDef):
     pr.disable()
 
     if not _canProfile:
-    	pr.print_stats()
-    	return result
+        pr.print_stats()
+        return result
 
     currentBaseFolder = os.path.dirname(__file__)
 
