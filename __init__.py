@@ -120,13 +120,13 @@ class Matrix(MMatrix):
 
     def asRadians(self):
         rx, ry, rz, ro = MTransformationMatrix(self).rotationComponents(asQuaternion=False)
-        return rx, ry, rz
+        return Euler(rx, ry, rz, ro)
 
     def asDegrees(self):
         return tuple(degrees(e) for e in self.asRadians())
 
     def rotation(self):
-        return MTransformationMatrix(self).rotation()
+        return Euler(MTransformationMatrix(self).rotation())
 
     def __repr__(self):
         return '[%s] : %s' % (', '.join(str(self[i]) for i in range(16)), self.__class__.__name__)
@@ -216,8 +216,8 @@ class Euler(MEulerRotation):
             a = 0 if index.start is None else index.start
             b = len(self) if index.stop is None else index.stop
             c = 1 if index.step is None else index.step
-            return list(super(Vector, self).__getitem__(i) for i in range(a, b, c))
-        return super(Vector, self).__getitem__(index)
+            return list(super(Euler, self).__getitem__(i) for i in range(a, b, c))
+        return super(Euler, self).__getitem__(index)
 
     def __setitem__(self, index, value):
         if isinstance(index, slice):
@@ -225,9 +225,9 @@ class Euler(MEulerRotation):
             b = len(self) if index.stop is None else index.stop
             c = 1 if index.step is None else index.step
             for i, v in zip(range(a, b, c), value):
-                super(Vector, self).__setitem__(i, v)
+                super(Euler, self).__setitem__(i, v)
             return
-        super(Vector, self).__setitem__(index, value)
+        super(Euler, self).__setitem__(index, value)
    
     def __iter__(self):
         for i in xrange(len(self)):
@@ -236,6 +236,8 @@ class Euler(MEulerRotation):
 
 class QuaternionOrPoint(MQuaternion):
     # TODO: add MPoint functionality where missing from MQuaternion
+    def asEulerRotation(self): return Euler(super(QuaternionOrPoint, self).asEulerRotation())
+
     def __repr__(self):
         return '[%s] : %s' % (', '.join(str(self[i]) for i in range(4)), self.__class__.__name__)
 

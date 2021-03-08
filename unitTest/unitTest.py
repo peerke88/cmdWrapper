@@ -36,7 +36,7 @@ try:
 except:
     _canProfile = False
 
-from cmdWrapper import cmds, Vector
+from cmdWrapper import cmds, Vector, Matrix
 
 cmds.loadPlugin('matrixNodes',qt=True)
 cmds.loadPlugin('quatNodes', qt=True)
@@ -117,6 +117,17 @@ class TestCmds(unittest.TestCase):
         mat.setT(vecC)
         if cmds.about(v=1) > 2020:
             loc2.offsetParentMatrix.set(mat)
+
+        vecE = vecA ^ vecC
+        nMat = Matrix(vecA.normal()[:] + [0] + vecE.normal()[:] +[0] + vecC.normal()[:] + [0] + loc1.translate()[:] + [1] )
+        loc.setM(nMat)
+        euler1 = nMat.rotation()
+        quat1.asQuaternion()
+        euler2.asEulerRotation()
+        self.assertEqual(euler1, euler2)
+
+        a = nMat.rotation()
+        self.assertEqual(tuple(math.degrees(b) for b in a), nMat.asR())
 
 ## \~english testing context that will fire the unitTests but can be used in a cProfile argument
 def testctx():
