@@ -31,10 +31,10 @@ import warnings
 import functools
 
 from math import degrees
-from maya.OpenMaya import MSelectionList as _oldMSelectionList
 
-from maya import cmds as _cmds
+# noinspection PyUnresolvedReferences
 from maya.api.OpenMaya import MMatrix, MVector, MTransformationMatrix, MGlobal, MFnTypedAttribute, MDagPath, MFnDependencyNode, MDGModifier, MDagModifier, MObject, MEulerRotation, MAngle, MPoint, MQuaternion
+from maya import cmds as _cmds
 
 from maya.OpenMaya import MSelectionList as _oldMSelectionList
 from maya.OpenMaya import MGlobal as _oldMGlobal
@@ -96,9 +96,99 @@ def _getMDagPath(nodeName):
     return MGlobal.getSelectionListByName(nodeName).getDagPath(0)
 
 
+def _wrapReturnValue(cls, fn, *args, **kwargs):
+    return cls(fn(*args, **kwargs))
+
+
+def _install_math_functions(cls, size, wrap_return_attrs=tuple(), ops=None):
+    def __repr__(self):
+        return '[%s] : %s' % (', '.join(str(self[i]) for i in range(size)), self.__class__.__name__)
+
+    # noinspection PyUnresolvedReferences
+    def __getitem__(self, index):
+        if isinstance(index, slice):
+            a = 0 if index.start is None else index.start
+            b = len(self) if index.stop is None else index.stop
+            c = 1 if index.step is None else index.step
+            return list(super(cls, self).__getitem__(i) for i in range(a, b, c))
+        return super(cls, self).__getitem__(index)
+
+    # noinspection PyUnresolvedReferences
+    def __setitem__(self, index, value):
+        if isinstance(index, slice):
+            a = 0 if index.start is None else index.start
+            b = len(self) if index.stop is None else index.stop
+            c = 1 if index.step is None else index.step
+            list(super(cls, self).__setitem__(i) for i, v in zip(range(a, b, c), value))
+            return
+        super(cls, self).__setitem__(index, value)
+
+    def __iter__(self):
+        for i in xrange(len(self)):
+            yield self[i]
+
+    def __eq__(self, other):
+        if hasattr(other, '__iter__'):
+            return tuple(self) == tuple(other)
+        return False
+
+    def _wrap(maybeCast):
+        if isinstance(maybeCast, cls.__bases__[0]):
+            return cls(maybeCast)
+        return maybeCast
+
+    def __getattribute__(self, attr):
+        result = super(cls, self).__getattribute__(attr)
+        if attr in wrap_return_attrs:
+            return functools.partial(_wrapReturnValue, self.__class__, result)
+        return result
+
+    def __xor__(self, right):
+        # noinspection PyUnresolvedReferences
+        return _wrap(super(Vector, self).__xor__(right))
+
+    def __add__(self, right):
+        # noinspection PyUnresolvedReferences
+        return _wrap(super(Vector, self).__add__(right))
+
+    def __mul__(self, right):
+        # noinspection PyUnresolvedReferences
+        return _wrap(super(Vector, self).__mul__(right))
+
+    def __sub__(self, right):
+        # noinspection PyUnresolvedReferences
+        return _wrap(super(Vector, self).__sub__(right))
+
+    def __div__(self, right):
+        # noinspection PyUnresolvedReferences
+        return _wrap(super(Vector, self).__div__(right))
+
+    cls.__repr__ = __repr__
+    cls.__getitem__ = __getitem__
+    cls.__setitem__ = __setitem__
+    cls.__iter__ = __iter__
+    cls.__eq__ = __eq__
+    cls._wrap = _wrap
+    cls.__getattribute__ = __getattribute__
+    if ops:
+        if '+' in ops:
+            cls.__add__ = __add__
+        if '-' in ops:
+            cls.__sub__ = __sub__
+        if '*' in ops:
+            cls.__mul__ = __mul__
+        if '/' in ops:
+            cls.__div__ = __div__
+        if '^' in ops:
+            cls.__xor__ = __xor__
+
+
 class Matrix(MMatrix):
-    def __mul__(self, other):
-        return Matrix(super(Matrix, self).__mul__(other))
+    def __init__(self, *args):
+        if len(args) == 16:
+            super(Matrix, self).__init__(args)
+        else:
+            super(Matrix, self).__init__(*args)
 
     def get(self, r, c):
         return self[r * 4 + c]
@@ -120,147 +210,75 @@ class Matrix(MMatrix):
 
     def asRadians(self):
         rx, ry, rz, ro = MTransformationMatrix(self).rotationComponents(asQuaternion=False)
-        return Euler(rx, ry, rz, ro)
+        return rx, ry, rz
 
     def asDegrees(self):
-        return tuple(degrees(e) for e in self.asRadians())
+        rx, ry, rz, ro = MTransformationMatrix(self).rotationComponents(asQuaternion=False)
+        return degrees(rx), degrees(ry), degrees(rz)
 
     def rotation(self):
         return Euler(MTransformationMatrix(self).rotation())
 
-    def __repr__(self):
-        return '[%s] : %s' % (', '.join(str(self[i]) for i in range(16)), self.__class__.__name__)
-
-    def __getitem__(self, index):
-        if isinstance(index, slice):
-            a = 0 if index.start is None else index.start
-            b = len(self) if index.stop is None else index.stop
-            c = 1 if index.step is None else index.step
-            return list(super(Matrix, self).__getitem__(i) for i in range(a, b, c))
-        return super(Matrix, self).__getitem__(index)
-
-    def __setitem__(self, index, value):
-        if isinstance(index, slice):
-            a = 0 if index.start is None else index.start
-            b = len(self) if index.stop is None else index.stop
-            c = 1 if index.step is None else index.step
-            list(super(Matrix, self).__setitem__(i) for i, v in zip(range(a, b, c), value))
-            return
-        super(Matrix, self).__setitem__(index, value)
-
-    def __iter__(self):
-        for i in xrange(len(self)):
-            yield self[i]
-
-
-def _wrapReturnValue(cls, fn, *args, **kwargs):
-    return cls(fn(*args, **kwargs))
-
 
 class Vector(MVector):
-    def __repr__(self):
-        return '[%s] : %s' % (', '.join(str(self[i]) for i in range(3)), self.__class__.__name__)
-
     def cross(self, other):
-        return Vector(self ^ other)
+        return self ^ other
 
-    def __getitem__(self, index):
-        if isinstance(index, slice):
-            a = 0 if index.start is None else index.start
-            b = len(self) if index.stop is None else index.stop
-            c = 1 if index.step is None else index.step
-            return list(super(Vector, self).__getitem__(i) for i in range(a, b, c))
-        return super(Vector, self).__getitem__(index)
+    def __mul__(self, right):
+        if isinstance(right, MVector):
+            # dot product, returns a float
+            return super(Vector, self).__mul__(right)
+        return self._wrap(super(Vector, self).__mul__(right))
 
-    def __setitem__(self, index, value):
-        if isinstance(index, slice):
-            a = 0 if index.start is None else index.start
-            b = len(self) if index.stop is None else index.stop
-            c = 1 if index.step is None else index.step
-            for i, v in zip(range(a, b, c), value):
-                super(Vector, self).__setitem__(i, v)
-            return
-        super(Vector, self).__setitem__(index, value)
-
-    def __iter__(self):
-        for i in xrange(len(self)):
-            yield self[i]
-
-    def _wrap(self, maybeMVector):
-        if isinstance(maybeMVector, MVector): return Vector(maybeMVector)
-        return maybeMVector
-
-    def __xor__(self, right): return self._wrap(super(Vector, self).__xor__(right))
-    def __add__(self, right): return self._wrap(super(Vector, self).__add__(right))
-    def __mul__(self, right): return self._wrap(super(Vector, self).__mul__(right))
-    def __sub__(self, right): return self._wrap(super(Vector, self).__sub__(right))
-    def __div__(self, right): return self._wrap(super(Vector, self).__div__(right))
-
-    def __getattribute__(self, attr):
-        result = super(Vector, self).__getattribute__(attr)
-        if attr in ('rotateBy', 'normal', 'transformAsNormal'):
-            return functools.partial(_wrapReturnValue, self.__class__, result)
-        return result
+    def rotateTo(self, other):
+        return QuaternionOrPoint(super(Vector, self).rotateTo(other))
 
 
 class Euler(MEulerRotation):
-    def asQuaternion(self): return QuaternionOrPoint(super(Euler, self).asQuaternion())
-    def asMatrix(self): return Matrix(super(Euler, self).asMatrix())
-    def asVector(self): return Vector(super(Euler, self).asVector())
-    
+    def asQuaternion(self):
+        return QuaternionOrPoint(super(Euler, self).asQuaternion())
+
+    def asMatrix(self):
+        return Matrix(super(Euler, self).asMatrix())
+
+    def asVector(self):
+        return Vector(super(Euler, self).asVector())
+
     def __repr__(self):
         return '[%s] %s : %s' % (', '.join(str(self[i]) for i in range(3)), self.order, self.__class__.__name__)
-
-    def __getitem__(self, index):
-        if isinstance(index, slice):
-            a = 0 if index.start is None else index.start
-            b = len(self) if index.stop is None else index.stop
-            c = 1 if index.step is None else index.step
-            return list(super(Euler, self).__getitem__(i) for i in range(a, b, c))
-        return super(Euler, self).__getitem__(index)
-
-    def __setitem__(self, index, value):
-        if isinstance(index, slice):
-            a = 0 if index.start is None else index.start
-            b = len(self) if index.stop is None else index.stop
-            c = 1 if index.step is None else index.step
-            for i, v in zip(range(a, b, c), value):
-                super(Euler, self).__setitem__(i, v)
-            return
-        super(Euler, self).__setitem__(index, value)
-   
-    def __iter__(self):
-        for i in xrange(len(self)):
-            yield self[i]
 
 
 class QuaternionOrPoint(MQuaternion):
     # TODO: add MPoint functionality where missing from MQuaternion
     def asEulerRotation(self): return Euler(super(QuaternionOrPoint, self).asEulerRotation())
 
-    def __repr__(self):
-        return '[%s] : %s' % (', '.join(str(self[i]) for i in range(4)), self.__class__.__name__)
+    def asMatrix(self): return Matrix(super(QuaternionOrPoint, self).asMatrix())
 
-    def __getitem__(self, index):
-        if isinstance(index, slice):
-            a = 0 if index.start is None else index.start
-            b = len(self) if index.stop is None else index.stop
-            c = 1 if index.step is None else index.step
-            return list(super(QuaternionOrPoint, self).__getitem__(i) for i in range(a, b, c))
-        return super(QuaternionOrPoint, self).__getitem__(index)
 
-    def __setitem__(self, index, value):
-        if isinstance(index, slice):
-            a = 0 if index.start is None else index.start
-            b = len(self) if index.stop is None else index.stop
-            c = 1 if index.step is None else index.step
-            list(super(QuaternionOrPoint, self).__setitem__(i) for i, v in zip(range(a, b, c), value))
-            return
-        super(QuaternionOrPoint, self).__setitem__(index, value)
+# TODO: If this is slow to import maybe we need to write it all out so it's just all one big pyc instead of a bunch of dynamic changes
+# noinspection PyTypeChecker
+_install_math_functions(Matrix, 16, ('transpose', 'inverse', 'adjoint', 'homogenize'), '+-*')
+# noinspection PyTypeChecker
+_install_math_functions(Vector, 3, ('rotateBy', 'normal', 'transformAsNormal'), '+-*/^')
+# noinspection PyTypeChecker
+_install_math_functions(Euler, 3, ('inverse', 'reorder', 'bound', 'alternateSolution', 'closestSolution', 'closestCut'), '+-*')
+# noinspection PyTypeChecker
+_install_math_functions(QuaternionOrPoint, 4, ('normal', 'conjugate', 'inverse', 'log', 'exp'), '+-')
 
-    def __iter__(self):
-        for i in xrange(len(self)):
-            yield self[i]
+# TODO: Maybe these should all be properties that return a copy to avoid user error in changing these 'constants'
+Euler.decompose = lambda matrix, order: Euler(MEulerRotation.decompose(matrix, order))
+Euler.identity = Euler(0, 0, 0)
+QuaternionOrPoint.identity = QuaternionOrPoint(0, 0, 0, 1)
+QuaternionOrPoint.origin = QuaternionOrPoint.identity
+Matrix.identity = Matrix(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
+Vector.zero = Vector(0, 0, 0)
+Vector.xAxis = Vector(1, 0, 0)
+Vector.yAxis = Vector(0, 1, 0)
+Vector.zAxis = Vector(0, 0, 1)
+Vector.xNegAxis = Vector(-1, 0, 0)
+Vector.yNegAxis = Vector(0, -1, 0)
+Vector.zNegAxis = Vector(0, 0, -1)
+Vector.one = Vector(1, 1, 1)
 
 
 def _wrapMathObjects(value):
@@ -300,41 +318,18 @@ class _Attribute(object):
         self._path = path
         self._setterKwargs = {}
 
+        # noinspection PyBroadException
         try:
             t = cmds.getAttr(str(self._path), type=True)
-        # noinspection PyBroadException
         except:
             if _debug:
-                wanings.warn('Unknown attr type at %s' % self._path)
+                warnings.warn('Unknown attr type at %s' % self._path)
             return
 
-        if t in ('short2',
-                 'short3',
-                 'long2',
-                 'long3',
-                 'Int32Array',
-                 'float2',
-                 'float3',
-                 'double2',
-                 'double3',
-                 'doubleArray',
-                 'matrix',
-                 'pointArray',
-                 'vectorArray',
-                 'string',
-                 'stringArray',
-                 'sphere',
-                 'cone',
-                 'reflectanceRGB',
-                 'spectrumRGB',
-                 'componentList',
-                 'attributeAlias',
-                 'nurbsCurve',
-                 'nurbsSurface',
-                 'nurbsTrimface',
-                 'polyFace',
-                 'mesh',
-                 'lattice'):
+        if t in (
+                'short2', 'short3', 'long2', 'long3', 'Int32Array', 'float2', 'float3', 'double2', 'double3', 'doubleArray', 'matrix', 'pointArray', 'vectorArray', 'string', 'stringArray', 'sphere', 'cone',
+                'reflectanceRGB',
+                'spectrumRGB', 'componentList', 'attributeAlias', 'nurbsCurve', 'nurbsSurface', 'nurbsTrimface', 'polyFace', 'mesh', 'lattice'):
             self._setterKwargs['type'] = t
 
     def __call__(self, *args):
@@ -378,6 +373,11 @@ class _Attribute(object):
 
     def __repr__(self):
         return self._path + ' : ' + self.__class__.__name__  # so we can easily throw Attribute() objects into maya functions
+
+    def __eq__(self, other):
+        if isinstance(other, _Attribute):
+            return self._path == other._path
+        return False
 
     def connect(self, destination):
         cmds.connectAttr(self._path, str(destination), force=True)
@@ -479,6 +479,7 @@ class DependNode(object):
     @classmethod
     def pool(cls, nodeName, nodeType):
         # Using internal Maya cmds to avoid recursive calls (wrapped cmds.ls() constructs DependNode objects when necessary)
+        # noinspection PyUnresolvedReferences
         key = _cmds.ls(nodeName, uuid=True)[0]
         inst = DependNode._instances.get(key, None)
         if inst is None:
@@ -490,6 +491,7 @@ class DependNode(object):
         assert isinstance(nodeName, basestring)
         self.__type = nodeType
         # Using internal Maya cmds to avoid recursive calls (wrapped cmds.ls() constructs DependNode objects when necessary)
+        # noinspection PyUnresolvedReferences
         if _cmds.ls(nodeName, l=True)[0][0] == '|':
             self.__handle = _getMDagPath(nodeName)
             assert self.__handle.isValid()
@@ -518,6 +520,11 @@ class DependNode(object):
             return self.__handle.fullPathName()
         self._MFnDependencyNode.setObject(self.__handle)
         return self._MFnDependencyNode.name()
+
+    def __eq__(self, other):
+        if isinstance(other, DependNode):
+            return self._nodeName == other._nodeName
+        return False
 
     def rename(self, newName):
         cmds.rename(self._nodeName, newName)
@@ -553,20 +560,7 @@ class DependNode(object):
         if 'type' in kwargs:
             t = kwargs['type']
             del kwargs['type']
-            if t in ['string',
-                     'stringArray',
-                     'matrix',
-                     'reflectanceRGB',
-                     'spectrumRGB',
-                     'doubleArray',
-                     'floatArray',
-                     'Int32Array',
-                     'vectorArray',
-                     'nurbsCurve',
-                     'nurbsSurface',
-                     'mesh',
-                     'lattice',
-                     'pointArray']:
+            if t in ('string', 'stringArray', 'matrix', 'reflectanceRGB', 'spectrumRGB', 'doubleArray', 'floatArray', 'Int32Array', 'vectorArray', 'nurbsCurve', 'nurbsSurface', 'mesh', 'lattice', 'pointArray'):
                 kwargs['dt'] = t
             else:
                 kwargs['at'] = t
@@ -576,8 +570,7 @@ class DependNode(object):
         return [_Attribute(self._nodeName + '.' + attr) for attr in cmds.listAttr(self._nodeName, ud=ud)]
 
     def isShape(self):
-        return self.__type in ['nurbsCurve', 'nurbsSurface', 'mesh', 'follicle', 'RigSystemControl',
-                               'distanceDimShape', 'cMuscleKeepOut', 'cMuscleObject']
+        return self.__type in ('nurbsCurve', 'nurbsSurface', 'mesh', 'follicle', 'RigSystemControl', 'distanceDimShape', 'cMuscleKeepOut', 'cMuscleObject')
 
 
 class DagNode(DependNode):
@@ -603,6 +596,7 @@ class Transform(DagNode):
         return cmds.listRelatives(self._nodeName, c=True, f=True, type='shape') or []
 
     def _children(self):
+        # noinspection PyUnresolvedReferences
         return _cmds.listRelatives(self._nodeName, c=True, f=True) or []
 
     def children(self):
@@ -618,7 +612,7 @@ class Transform(DagNode):
         return wrapNode(self._children()[index])
 
     def getT(self, ws=False):
-        return MVector(*cmds.xform(self._nodeName, q=True, ws=ws, t=True))
+        return Vector(*cmds.xform(self._nodeName, q=True, ws=ws, t=True))
 
     def getM(self, ws=False):
         return Matrix(cmds.xform(self._nodeName, q=True, ws=ws, m=True))
@@ -683,6 +677,7 @@ def wrapNode(nodeName):
         return getattr(result, suffix)
     if not cmds.objExists(nodeName):
         return None
+    # noinspection PyUnresolvedReferences
     nodeType = _cmds.nodeType(nodeName)
     return _wrapperTypes.get(nodeType, DependNode).pool(nodeName, nodeType)
 
@@ -725,8 +720,8 @@ def getNode(nodeName=None):
     if isinstance(nodeName, (str, unicode, bytes)):
         nodeNames = [nodeName]
         _singleNode = True
-    elif isinstance(nodeName, MObject):  # _oldMObject):
-        nodeFn = OpenMaya.MFnDependencyNode(nodeName)
+    elif isinstance(nodeName, MObject):
+        nodeFn = MFnDependencyNode(nodeName)
         nodeNames = [nodeFn.name()]
         _singleNode = True
     elif _isStringOrStringList(nodeName):
@@ -774,4 +769,3 @@ def allDescendants(nodeList):
         for ch in node.allDescendants():
             unique_children.add(ch)
     return unique_children
-
