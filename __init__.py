@@ -27,17 +27,14 @@ SOFTWARE.
 Thin wrapper around Maya API & cmds to make interacting with nodes more convenient.
 Read more over at https://github.com/peerke88/cmdWrapper
 """
-
-if __name__ == '__main__':
-    from maya import standalone
-
-    standalone.initialize(name='python')
+import warnings
+import functools
 
 from math import degrees
+from maya.OpenMaya import MSelectionList as _oldMSelectionList
+
 from maya import cmds as _cmds
-from maya.api.OpenMaya import MMatrix, MVector, MTransformationMatrix, MGlobal, \
-    MFnTypedAttribute, MDagPath, MFnDependencyNode, MDGModifier, MDagModifier, MObject, MEulerRotation, MAngle, MPoint, MQuaternion
-import warnings
+from maya.api.OpenMaya import MMatrix, MVector, MTransformationMatrix, MGlobal, MFnTypedAttribute, MDagPath, MFnDependencyNode, MDGModifier, MDagModifier, MObject, MEulerRotation, MAngle, MPoint, MQuaternion
 
 from maya.OpenMaya import MSelectionList as _oldMSelectionList
 from maya.OpenMaya import MGlobal as _oldMGlobal
@@ -115,11 +112,11 @@ class Matrix(MMatrix):
         return self.asDegrees()
 
     def asT(self):
-        return MVector(self[12], self[13], self[14])
+        return Vector(self[12], self[13], self[14])
 
     def axis(self, index):
         i = index * 4
-        return MVector(self[i], self[i + 1], self[i + 2])
+        return Vector(self[i], self[i + 1], self[i + 2])
 
     def asRadians(self):
         rx, ry, rz, ro = MTransformationMatrix(self).rotationComponents(asQuaternion=False)
@@ -156,6 +153,10 @@ class Matrix(MMatrix):
             yield self[i]
 
 
+def _wrapReturnValue(cls, fn, *args, **kwargs):
+    return cls(fn(*args, **kwargs))
+
+
 class Vector(MVector):
     def __repr__(self):
         return '[%s] : %s' % (', '.join(str(self[i]) for i in range(3)), self.__class__.__name__)
@@ -184,7 +185,23 @@ class Vector(MVector):
     def __iter__(self):
         for i in xrange(len(self)):
             yield self[i]
-            
+
+    def _wrap(self, maybeMVector):
+        if isinstance(maybeMVector, MVector): return Vector(maybeMVector)
+        return maybeMVector
+
+    def __xor__(self, right): return self._wrap(super(Vector, self).__xor__(right))
+    def __add__(self, right): return self._wrap(super(Vector, self).__add__(right))
+    def __mul__(self, right): return self._wrap(super(Vector, self).__mul__(right))
+    def __sub__(self, right): return self._wrap(super(Vector, self).__sub__(right))
+    def __div__(self, right): return self._wrap(super(Vector, self).__div__(right))
+
+    def __getattribute__(self, attr):
+        result = super(Vector, self).__getattribute__(attr)
+        if attr in ('rotateBy', 'normal', 'transformAsNormal'):
+            return functools.partial(_wrapReturnValue, self.__class__, result)
+        return result
+
 
 class Euler(MEulerRotation):
     def asQuaternion(self): return QuaternionOrPoint(super(Euler, self).asQuaternion())
