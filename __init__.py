@@ -80,7 +80,7 @@ class _Cmd(object):
                 return return_value
             return_value = tmp
 
-        return return_value
+        return _wrapMathObjects(return_value)
 
 
 class _Cmds(object):
@@ -159,6 +159,9 @@ class Matrix(MMatrix):
 class Vector(MVector):
     def __repr__(self):
         return '[%s] : %s' % (', '.join(str(self[i]) for i in range(3)), self.__class__.__name__)
+
+    def cross(self, other):
+        return Vector(self ^ other)
 
     def __getitem__(self, index):
         if isinstance(index, slice):
