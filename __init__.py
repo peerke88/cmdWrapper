@@ -744,8 +744,6 @@ def children(nodeList):
         for ch in node.children():
             unique_children.add(ch)
     return unique_children
-    #     unique_children |= set(node.children())
-    # return sorted(list(unique_children), key=len)
 
 
 def allDescendants(nodeList):
@@ -754,85 +752,4 @@ def allDescendants(nodeList):
         for ch in node.allDescendants():
             unique_children.add(ch)
     return unique_children
-    #    unique_children |= set(node.allDescendants())
-    # return sorted(list(unique_children), key=len)
 
-
-if __name__ == '__main__':
-    # do some tests
-    def validate(a, b):
-        if a != b:
-            print('Error: (%s) != (%s)' % (a, b))
-
-    def validate_as_strs(a, b):
-        if len(a) != len(b):
-            print('Error: (%s) != (%s)' % (a, b))
-            return
-        for ae, be in zip(a, b):
-            if str(ae) != str(be):
-                print('Error: (%s) != (%s)' % (a, b))
-                return
-
-    def validate_floats(a, b):
-        if len(a) != len(b):
-            print('Error: (%s) != (%s)' % (a, b))
-            return
-        epsilon = 1e-9
-        for ae, be in zip(a, b):
-            if abs(ae - be) > epsilon:
-                print('Error: (%s) != (%s)' % (a, b))
-                return
-
-
-    def tests():
-        print('Running tests.')
-        print('Initializing maya standalone, make sure to run using mayapy.exe.')
-        # create a nod
-        transform = createNode('transform')
-        validate(str(transform), '|transform1')
-        # get and set translate
-        validate(transform.tx(), 0.0)
-        validate(transform.translate.get(), (0.0, 0.0, 0.0))
-        transform.translate = 10.0, 1.0, 0.0
-        # noinspection PyCallingNonCallable
-        validate(transform.translate(), (10.0, 1.0, 0.0))
-        transform.tx.set(2.0)
-        validate(transform.tx(), 2.0)
-        # find a node & it's shape
-        persp_transform = getNode('persp')
-        persp_shape = persp_transform.shape()
-        validate(str(persp_shape), '|persp|perspShape')
-        # reparent a node
-        transform.setParent(persp_transform)
-        validate(str(transform), '|persp|transform1')
-        validate(transform.parent(), persp_transform)
-        # even attributes should still work
-        validate(str(transform.translate), '|persp|transform1.translate')
-        # cmds return type validation
-        validate(cmds.listRelatives(transform, ad=True), None)
-        validate_floats(cmds.xform(transform, q=True, ws=True, t=True), (2.0, 1.0, 0.0))
-        validate_floats(cmds.xform(transform, q=True, ws=True, m=True),
-                        (1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 2.0, 1.0, 0.0, 1.0))
-        validate(cmds.file(rename='C:/Test.ma'), 'C:/Test.ma')
-        validate('C:/Test.ma', cmds.file(q=True, sn=True))
-        validate(['C:/Test.ma'], cmds.file(query=True, list=True))
-        validate(['scale', 'scaleX', 'scaleY', 'scaleZ', 'scalePivot', 'scalePivotX', 'scalePivotY', 'scalePivotZ',
-                  'scalePivotTranslate', 'scalePivotTranslateX', 'scalePivotTranslateY', 'scalePivotTranslateZ'],
-                 cmds.listAttr(transform, r=True, st='scale*'))
-        validate(True, cmds.objExists(transform))
-        validate(DependNode, type(cmds.createNode('curveInfo')))
-        validate(['|test', 'makeNurbCircle1'], [str(e) for e in cmds.circle(n='test')])
-        validate('untitled', cmds.file(f=True, new=True))
-        validate('y' or 'z', cmds.upAxis(q=True, axis=True))
-        cmds.joint()
-        cmds.joint()
-        cmds.joint()
-        validate(children('|joint1'), {getNode('|joint1|joint2')})
-        validate(allDescendants('|joint1'), set(getNode(('|joint1|joint2', '|joint1|joint2|joint3'))))
-        for inst in cmds.ls(sl=0)[::5]:
-            assert isinstance(inst, DependNode)
-        crc = cmds.circle()[0]
-        validate_as_strs(cmds.ls('%s[*]' % crc.cv, fl=True), getNode(['|nurbsCircle1.cv[%i]' % i for i in range(8)]))
-
-
-    tests()

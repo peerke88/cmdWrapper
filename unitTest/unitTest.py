@@ -1,6 +1,9 @@
 import unittest, os, sys, logging, cProfile
 
-sys.path.insert(0, os.path.normpath(os.path.join(os.path.abspath(__file__), '../../../..')))
+_basePath = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if not _basePath in sys.path:
+	sys.path.insert(0, _basePath)
+
 import maya.standalone
 
 root_logger = logging.getLogger()
@@ -11,7 +14,7 @@ for x, y in logging.Logger.manager.loggerDict.iteritems():
     except Exception as e:
         pass
 
-    ## disable the crash reporting window.
+## disable the crash reporting window.
 os.environ["MAYA_DEBUG_ENABLE_CRASH_REPORTING"] = "0"
 os.environ["PYMEL_SKIP_MEL_INIT"] = "Temp"
 
@@ -22,10 +25,16 @@ maya.standalone.initialize(name='python')
 _coverage = True
 try:
     import coverage
-    cov = coverage.Coverage(source=['CarbonRigSystem'])
+    cov = coverage.Coverage(source=['cmdWrapper'])
     cov.start()
 except Exception as err:
     _coverage = False
+
+_canProfile = True
+try:
+    from cmdWrapper import pyprof2calltree
+except:
+    _canProfile = False
 
 from cmdWrapper import cmds
 
@@ -105,41 +114,37 @@ def testctx():
     return test
 
 def runctx(inDef):
-    _canProfile = True
-    try:
-        from cmdWrapper import pyprof2calltree
-    except:
-        _canProfile = False
-    
     pr = cProfile.Profile()
     pr.enable()
     result = inDef()
     pr.disable()
 
-    if _canProfile:
-        currentBaseFolder = os.path.dirname(__file__)
+    if not _canProfile:
+    	pr.print_stats()
+    	return result
 
-        baseLocation = os.path.normpath(os.path.join(currentBaseFolder, "qcachegrind"))
-        inLocation = os.path.normpath(os.path.join(currentBaseFolder, "unitTest"))
+    currentBaseFolder = os.path.dirname(__file__)
 
-        executable = os.path.normpath(os.path.join(baseLocation, "qcachegrind.exe"))
-        callGrindProf = os.path.normpath(os.path.join(inLocation, 'callgrind.profile'))
-        binaryData = os.path.normpath(os.path.join(inLocation, 'profiledRigSystem.profile'))
+    baseLocation = os.path.normpath(os.path.join(currentBaseFolder, "qcachegrind"))
+    inLocation = os.path.normpath(os.path.join(currentBaseFolder, "unitTest"))
 
-        for path in [callGrindProf, binaryData]:
-            dirpath = os.path.dirname(path)
-            if not os.path.exists(dirpath):
-                os.makedirs(dirpath)
+    executable = os.path.normpath(os.path.join(baseLocation, "qcachegrind.exe"))
+    callGrindProf = os.path.normpath(os.path.join(inLocation, 'callgrind.profile'))
+    binaryData = os.path.normpath(os.path.join(inLocation, 'profiledRigSystem.profile'))
 
-        pr.dump_stats(binaryData)
+    for path in [callGrindProf, binaryData]:
+        dirpath = os.path.dirname(path)
+        if not os.path.exists(dirpath):
+            os.makedirs(dirpath)
 
-        pyprof2calltree.convert(pstats.Stats(binaryData), callGrindProf)
-        pyprof2calltree.visualize(pstats.Stats(binaryData))
-        subprocess.Popen([executable, callGrindProf])
-        return result
-    
-    pr.print_stats()
+    pr.dump_stats(binaryData)
+
+    pyprof2calltree.convert(pstats.Stats(binaryData), callGrindProf)
+    pyprof2calltree.visualize(pstats.Stats(binaryData))
+    subprocess.Popen([executable, callGrindProf])
     return result
+
+    
 
 if __name__ == '__main__':
     testObject = runctx(testctx)
