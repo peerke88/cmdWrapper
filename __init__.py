@@ -100,7 +100,7 @@ def _wrapReturnValue(cls, fn, *args, **kwargs):
     return cls(fn(*args, **kwargs))
 
 
-def _install_math_functions(cls, size, wrap_return_attrs=tuple(), ops=None):
+def _installMathFunctions(cls, size, wrap_return_attrs=tuple(), ops=None):
     def __repr__(self):
         return '[%s] : %s' % (', '.join(str(self[i]) for i in range(size)), self.__class__.__name__)
 
@@ -145,23 +145,23 @@ def _install_math_functions(cls, size, wrap_return_attrs=tuple(), ops=None):
 
     def __xor__(self, right):
         # noinspection PyUnresolvedReferences
-        return _wrap(super(Vector, self).__xor__(right))
+        return _wrap(super(cls, self).__xor__(right))
 
     def __add__(self, right):
         # noinspection PyUnresolvedReferences
-        return _wrap(super(Vector, self).__add__(right))
+        return _wrap(super(cls, self).__add__(right))
 
     def __mul__(self, right):
         # noinspection PyUnresolvedReferences
-        return _wrap(super(Vector, self).__mul__(right))
+        return _wrap(super(cls, self).__mul__(right))
 
     def __sub__(self, right):
         # noinspection PyUnresolvedReferences
-        return _wrap(super(Vector, self).__sub__(right))
+        return _wrap(super(cls, self).__sub__(right))
 
     def __div__(self, right):
         # noinspection PyUnresolvedReferences
-        return _wrap(super(Vector, self).__div__(right))
+        return _wrap(super(cls, self).__div__(right))
 
     cls.__repr__ = __repr__
     cls.__getitem__ = __getitem__
@@ -257,13 +257,13 @@ class QuaternionOrPoint(MQuaternion):
 
 # TODO: If this is slow to import maybe we need to write it all out so it's just all one big pyc instead of a bunch of dynamic changes
 # noinspection PyTypeChecker
-_install_math_functions(Matrix, 16, ('transpose', 'inverse', 'adjoint', 'homogenize'), '+-*')
+_installMathFunctions(Matrix, 16, ('transpose', 'inverse', 'adjoint', 'homogenize'), '+-*')
 # noinspection PyTypeChecker
-_install_math_functions(Vector, 3, ('rotateBy', 'normal', 'transformAsNormal'), '+-*/^')
+_installMathFunctions(Vector, 3, ('rotateBy', 'normal', 'transformAsNormal'), '+-*/^')
 # noinspection PyTypeChecker
-_install_math_functions(Euler, 3, ('inverse', 'reorder', 'bound', 'alternateSolution', 'closestSolution', 'closestCut'), '+-*')
+_installMathFunctions(Euler, 3, ('inverse', 'reorder', 'bound', 'alternateSolution', 'closestSolution', 'closestCut'), '+-*')
 # noinspection PyTypeChecker
-_install_math_functions(QuaternionOrPoint, 4, ('normal', 'conjugate', 'inverse', 'log', 'exp'), '+-')
+_installMathFunctions(QuaternionOrPoint, 4, ('normal', 'conjugate', 'inverse', 'log', 'exp'), '+-')
 
 # TODO: Maybe these should all be properties that return a copy to avoid user error in changing these 'constants'
 Euler.decompose = lambda matrix, order: Euler(MEulerRotation.decompose(matrix, order))
