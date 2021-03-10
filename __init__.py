@@ -693,6 +693,7 @@ _wrapperTypes = {
     'cMuscleKeepOut': Shape,
     'cMuscleObject': Shape,
     'camera': Shape,
+    'annotationShape' : Shape,
 }
 
 
