@@ -33,7 +33,8 @@ import functools
 from math import degrees
 
 # noinspection PyUnresolvedReferences
-from maya.api.OpenMaya import MMatrix, MVector, MTransformationMatrix, MGlobal, MFnTypedAttribute, MDagPath, MFnDependencyNode, MDGModifier, MDagModifier, MObject, MEulerRotation, MAngle, MPoint, MQuaternion
+from maya.api.OpenMaya import MMatrix, MVector, MTransformationMatrix, MGlobal, MFnTypedAttribute, MDagPath, \
+    MFnDependencyNode, MDGModifier, MDagModifier, MObject, MEulerRotation, MAngle, MPoint, MQuaternion
 from maya import cmds as _cmds
 
 from maya.OpenMaya import MSelectionList as _oldMSelectionList
@@ -132,6 +133,9 @@ def _installMathFunctions(cls, size, wrap_return_attrs=tuple(), ops=None):
             return tuple(self) == tuple(other)
         return False
 
+    def __ne__(self, other):
+        return not (self == other)
+
     def _wrap(maybeCast):
         if isinstance(maybeCast, cls.__bases__[0]):
             return cls(maybeCast)
@@ -168,6 +172,7 @@ def _installMathFunctions(cls, size, wrap_return_attrs=tuple(), ops=None):
     cls.__setitem__ = __setitem__
     cls.__iter__ = __iter__
     cls.__eq__ = __eq__
+    cls.__ne__ = __ne__
     cls._wrap = _wrap
     cls.__getattribute__ = __getattribute__
     if ops:
@@ -229,7 +234,7 @@ class Vector(MVector):
             # dot product, returns a float
             return super(Vector, self).__mul__(right)
         return self._wrap(super(Vector, self).__mul__(right))
-
+    
     def rotateTo(self, other):
         return QuaternionOrPoint(super(Vector, self).rotateTo(other))
 
@@ -249,6 +254,23 @@ class Euler(MEulerRotation):
 
 
 class QuaternionOrPoint(MQuaternion):
+    def __init__(self, *args):
+        if len(args) == 1 and isinstance(args[0], MVector): args = args[0].x, args[0].y, args[0].z, 1.0
+        if len(args) == 3: args += (1,)
+        super(QuaternionOrPoint, self).__init__(*args)
+
+    def __imul__(self, other):
+        if isinstance(other, MMatrix):
+            tmp = MPoint(self.x, self.y, self.z, self.w) * other
+            self.x, self.y, self.z, self.w = tmp.x, tmp.y, tmp.z, tmp.w
+            return self
+        return super(cls, self).__imul__(right)
+        
+    def __mul__(self, other):
+        if isinstance(other, MMatrix):
+            tmp = MPoint(self.x, self.y, self.z, self.w) * other
+            return QuaternionOrPoint(tmp.x, tmp.y, tmp.z, tmp.w)
+        return QuaternionOrPoint(super(cls, self).__mul__(right))
     # TODO: add MPoint functionality where missing from MQuaternion
     def asEulerRotation(self): return Euler(super(QuaternionOrPoint, self).asEulerRotation())
 
@@ -261,7 +283,8 @@ _installMathFunctions(Matrix, 16, ('transpose', 'inverse', 'adjoint', 'homogeniz
 # noinspection PyTypeChecker
 _installMathFunctions(Vector, 3, ('rotateBy', 'normal', 'transformAsNormal'), '+-*/^')
 # noinspection PyTypeChecker
-_installMathFunctions(Euler, 3, ('inverse', 'reorder', 'bound', 'alternateSolution', 'closestSolution', 'closestCut'), '+-*')
+_installMathFunctions(Euler, 3, ('inverse', 'reorder', 'bound', 'alternateSolution', 'closestSolution', 'closestCut'),
+                      '+-*')
 # noinspection PyTypeChecker
 _installMathFunctions(QuaternionOrPoint, 4, ('normal', 'conjugate', 'inverse', 'log', 'exp'), '+-')
 
@@ -327,9 +350,11 @@ class _Attribute(object):
             return
 
         if t in (
-                'short2', 'short3', 'long2', 'long3', 'Int32Array', 'float2', 'float3', 'double2', 'double3', 'doubleArray', 'matrix', 'pointArray', 'vectorArray', 'string', 'stringArray', 'sphere', 'cone',
+                'short2', 'short3', 'long2', 'long3', 'Int32Array', 'float2', 'float3', 'double2', 'double3',
+                'doubleArray', 'matrix', 'pointArray', 'vectorArray', 'string', 'stringArray', 'sphere', 'cone',
                 'reflectanceRGB',
-                'spectrumRGB', 'componentList', 'attributeAlias', 'nurbsCurve', 'nurbsSurface', 'nurbsTrimface', 'polyFace', 'mesh', 'lattice'):
+                'spectrumRGB', 'componentList', 'attributeAlias', 'nurbsCurve', 'nurbsSurface', 'nurbsTrimface',
+                'polyFace', 'mesh', 'lattice'):
             self._setterKwargs['type'] = t
 
     def __call__(self, *args):
@@ -560,7 +585,8 @@ class DependNode(object):
         if 'type' in kwargs:
             t = kwargs['type']
             del kwargs['type']
-            if t in ('string', 'stringArray', 'matrix', 'reflectanceRGB', 'spectrumRGB', 'doubleArray', 'floatArray', 'Int32Array', 'vectorArray', 'nurbsCurve', 'nurbsSurface', 'mesh', 'lattice', 'pointArray'):
+            if t in ('string', 'stringArray', 'matrix', 'reflectanceRGB', 'spectrumRGB', 'doubleArray', 'floatArray',
+                     'Int32Array', 'vectorArray', 'nurbsCurve', 'nurbsSurface', 'mesh', 'lattice', 'pointArray'):
                 kwargs['dt'] = t
             else:
                 kwargs['at'] = t
@@ -570,7 +596,9 @@ class DependNode(object):
         return [_Attribute(self._nodeName + '.' + attr) for attr in cmds.listAttr(self._nodeName, ud=ud)]
 
     def isShape(self):
-        return self.__type in ('nurbsCurve', 'nurbsSurface', 'mesh', 'follicle', 'RigSystemControl', 'distanceDimShape', 'cMuscleKeepOut', 'cMuscleObject')
+        return self.__type in (
+            'nurbsCurve', 'nurbsSurface', 'mesh', 'follicle', 'RigSystemControl', 'distanceDimShape', 'cMuscleKeepOut',
+            'cMuscleObject')
 
 
 class DagNode(DependNode):
