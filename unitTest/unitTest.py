@@ -1,4 +1,4 @@
-import unittest, os, sys, logging, cProfile, random
+import unittest, os, sys, logging, cProfile, random, webbrowser
 
 _basePath = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if not _basePath in sys.path:
@@ -58,6 +58,7 @@ def testctx():
         cov.stop()
         cov.save()
         cov.html_report()
+        webbrowser.open(os.path.join(_basePath, r"unitTest/htmlcov/index.html"))
         
     return test
 
