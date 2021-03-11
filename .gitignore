@@ -127,3 +127,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+unitTest/log_file.txt
+
+log_file.txt

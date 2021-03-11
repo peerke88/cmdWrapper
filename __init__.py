@@ -27,12 +27,15 @@ SOFTWARE.
 Thin wrapper around Maya API & cmds to make interacting with nodes more convenient.
 Read more over at https://github.com/peerke88/cmdWrapper
 """
+import warnings
+import functools
 
 from math import degrees
+
+# noinspection PyUnresolvedReferences
+from maya.api.OpenMaya import MMatrix, MVector, MTransformationMatrix, MGlobal, MFnTypedAttribute, MDagPath, \
+    MFnDependencyNode, MDGModifier, MDagModifier, MObject, MEulerRotation, MAngle, MPoint, MQuaternion
 from maya import cmds as _cmds
-from maya.api.OpenMaya import MMatrix, MVector, MTransformationMatrix, MGlobal, \
-    MFnTypedAttribute, MDagPath, MFnDependencyNode, MFnDependencyNode
-import warnings
 
 from maya.OpenMaya import MSelectionList as _oldMSelectionList
 from maya.OpenMaya import MGlobal as _oldMGlobal
@@ -64,7 +67,18 @@ class _Cmd(object):
         for k, a in kwargs.iteritems():
             if isinstance(a, (_Attribute, DependNode)):
                 kwargs[k] = unwrap(a)
-        return self.fn(*args, **kwargs)
+        return_value = self.fn(*args, **kwargs)
+
+        # wrap return value if it is a list of nodes
+        if _isStringOrStringList(return_value):
+            # we return the original value in case the wrapper is None,
+            # this can happen when maya returns a str or str[] that does not represent nodes
+            tmp = getNode(return_value)
+            if tmp is None or (isinstance(tmp, (list, tuple)) and set(tmp) == {None}):
+                return return_value
+            return_value = tmp
+
+        return _wrapMathObjects(return_value)
 
 
 class _Cmds(object):
@@ -83,9 +97,103 @@ def _getMDagPath(nodeName):
     return MGlobal.getSelectionListByName(nodeName).getDagPath(0)
 
 
+def _wrapReturnValue(cls, fn, *args, **kwargs):
+    return cls(fn(*args, **kwargs))
+
+
+def _installMathFunctions(cls, size, wrap_return_attrs=tuple(), ops=None):
+    def __repr__(self):
+        return '[%s] : %s' % (', '.join(str(self[i]) for i in range(size)), self.__class__.__name__)
+
+    # noinspection PyUnresolvedReferences
+    def __getitem__(self, index):
+        if isinstance(index, slice):
+            a = 0 if index.start is None else index.start
+            b = len(self) if index.stop is None else index.stop
+            c = 1 if index.step is None else index.step
+            return list(super(cls, self).__getitem__(i) for i in range(a, b, c))
+        return super(cls, self).__getitem__(index)
+
+    # noinspection PyUnresolvedReferences
+    def __setitem__(self, index, value):
+        if isinstance(index, slice):
+            a = 0 if index.start is None else index.start
+            b = len(self) if index.stop is None else index.stop
+            c = 1 if index.step is None else index.step
+            list(super(cls, self).__setitem__(i) for i, v in zip(range(a, b, c), value))
+            return
+        super(cls, self).__setitem__(index, value)
+
+    def __iter__(self):
+        for i in xrange(len(self)):
+            yield self[i]
+
+    def __eq__(self, other):
+        if hasattr(other, '__iter__'):
+            return tuple(self) == tuple(other)
+        return False
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    def _wrap(maybeCast):
+        if isinstance(maybeCast, cls.__bases__[0]):
+            return cls(maybeCast)
+        return maybeCast
+
+    def __getattribute__(self, attr):
+        result = super(cls, self).__getattribute__(attr)
+        if attr in wrap_return_attrs:
+            return functools.partial(_wrapReturnValue, self.__class__, result)
+        return result
+
+    def __xor__(self, right):
+        # noinspection PyUnresolvedReferences
+        return _wrap(super(cls, self).__xor__(right))
+
+    def __add__(self, right):
+        # noinspection PyUnresolvedReferences
+        return _wrap(super(cls, self).__add__(right))
+
+    def __mul__(self, right):
+        # noinspection PyUnresolvedReferences
+        return _wrap(super(cls, self).__mul__(right))
+
+    def __sub__(self, right):
+        # noinspection PyUnresolvedReferences
+        return _wrap(super(cls, self).__sub__(right))
+
+    def __div__(self, right):
+        # noinspection PyUnresolvedReferences
+        return _wrap(super(cls, self).__div__(right))
+
+    cls.__repr__ = __repr__
+    cls.__getitem__ = __getitem__
+    cls.__setitem__ = __setitem__
+    cls.__iter__ = __iter__
+    cls.__eq__ = __eq__
+    cls.__ne__ = __ne__
+    cls._wrap = _wrap
+    cls.__getattribute__ = __getattribute__
+    if ops:
+        if '+' in ops:
+            cls.__add__ = __add__
+        if '-' in ops:
+            cls.__sub__ = __sub__
+        if '*' in ops:
+            cls.__mul__ = __mul__
+        if '/' in ops:
+            cls.__div__ = __div__
+        if '^' in ops:
+            cls.__xor__ = __xor__
+
+
 class Matrix(MMatrix):
-    def __mul__(self, other):
-        return Matrix(super(Matrix, self).__mul__(other))
+    def __init__(self, *args):
+        if len(args) == 16:
+            super(Matrix, self).__init__(args)
+        else:
+            super(Matrix, self).__init__(*args)
 
     def get(self, r, c):
         return self[r * 4 + c]
@@ -99,21 +207,119 @@ class Matrix(MMatrix):
         return self.asDegrees()
 
     def asT(self):
-        return MVector(self[12], self[13], self[14])
+        return Vector(self[12], self[13], self[14])
 
     def axis(self, index):
         i = index * 4
-        return MVector(self[i], self[i + 1], self[i + 2])
+        return Vector(self[i], self[i + 1], self[i + 2])
 
     def asRadians(self):
         rx, ry, rz, ro = MTransformationMatrix(self).rotationComponents(asQuaternion=False)
         return rx, ry, rz
 
     def asDegrees(self):
-        return tuple(degrees(e) for e in self.asRadians())
+        rx, ry, rz, ro = MTransformationMatrix(self).rotationComponents(asQuaternion=False)
+        return degrees(rx), degrees(ry), degrees(rz)
 
     def rotation(self):
-        return MTransformationMatrix(self).rotation()
+        return Euler(MTransformationMatrix(self).rotation())
+
+
+class Vector(MVector):
+    def cross(self, other):
+        return self ^ other
+
+    def __mul__(self, right):
+        if isinstance(right, MVector):
+            # dot product, returns a float
+            return super(Vector, self).__mul__(right)
+        return self._wrap(super(Vector, self).__mul__(right))
+    
+    def rotateTo(self, other):
+        return QuaternionOrPoint(super(Vector, self).rotateTo(other))
+
+
+class Euler(MEulerRotation):
+    def asQuaternion(self):
+        return QuaternionOrPoint(super(Euler, self).asQuaternion())
+
+    def asMatrix(self):
+        return Matrix(super(Euler, self).asMatrix())
+
+    def asVector(self):
+        return Vector(super(Euler, self).asVector())
+
+    def __repr__(self):
+        return '[%s] %s : %s' % (', '.join(str(self[i]) for i in range(3)), self.order, self.__class__.__name__)
+
+
+class QuaternionOrPoint(MQuaternion):
+    def __init__(self, *args):
+        if len(args) == 1 and isinstance(args[0], MVector): args = args[0].x, args[0].y, args[0].z, 1.0
+        if len(args) == 3: args += (1,)
+        super(QuaternionOrPoint, self).__init__(*args)
+
+    def __imul__(self, other):
+        if isinstance(other, MMatrix):
+            tmp = MPoint(self.x, self.y, self.z, self.w) * other
+            self.x, self.y, self.z, self.w = tmp.x, tmp.y, tmp.z, tmp.w
+            return self
+        return super(cls, self).__imul__(right)
+        
+    def __mul__(self, other):
+        if isinstance(other, MMatrix):
+            tmp = MPoint(self.x, self.y, self.z, self.w) * other
+            return QuaternionOrPoint(tmp.x, tmp.y, tmp.z, tmp.w)
+        return QuaternionOrPoint(super(cls, self).__mul__(right))
+    # TODO: add MPoint functionality where missing from MQuaternion
+    def asEulerRotation(self): return Euler(super(QuaternionOrPoint, self).asEulerRotation())
+
+    def asMatrix(self): return Matrix(super(QuaternionOrPoint, self).asMatrix())
+
+
+# TODO: If this is slow to import maybe we need to write it all out so it's just all one big pyc instead of a bunch of dynamic changes
+# noinspection PyTypeChecker
+_installMathFunctions(Matrix, 16, ('transpose', 'inverse', 'adjoint', 'homogenize'), '+-*')
+# noinspection PyTypeChecker
+_installMathFunctions(Vector, 3, ('rotateBy', 'normal', 'transformAsNormal'), '+-*/^')
+# noinspection PyTypeChecker
+_installMathFunctions(Euler, 3, ('inverse', 'reorder', 'bound', 'alternateSolution', 'closestSolution', 'closestCut'),
+                      '+-*')
+# noinspection PyTypeChecker
+_installMathFunctions(QuaternionOrPoint, 4, ('normal', 'conjugate', 'inverse', 'log', 'exp'), '+-')
+
+# TODO: Maybe these should all be properties that return a copy to avoid user error in changing these 'constants'
+Euler.decompose = lambda matrix, order: Euler(MEulerRotation.decompose(matrix, order))
+Euler.identity = Euler(0, 0, 0)
+QuaternionOrPoint.identity = QuaternionOrPoint(0, 0, 0, 1)
+QuaternionOrPoint.origin = QuaternionOrPoint.identity
+Matrix.identity = Matrix(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
+Vector.zero = Vector(0, 0, 0)
+Vector.xAxis = Vector(1, 0, 0)
+Vector.yAxis = Vector(0, 1, 0)
+Vector.zAxis = Vector(0, 0, 1)
+Vector.xNegAxis = Vector(-1, 0, 0)
+Vector.yNegAxis = Vector(0, -1, 0)
+Vector.zNegAxis = Vector(0, 0, -1)
+Vector.one = Vector(1, 1, 1)
+
+
+def _wrapMathObjects(value):
+    # This tries to wrap the value into a math object
+    # only does something if the value is a list or tuple containing
+    # a specific number of floats (and no other data)
+    if not isinstance(value, (list, tuple)):
+        return value
+    for e in value:
+        if not isinstance(e, float):
+            return value
+    if len(value) == 3:
+        return Vector(*value)
+    if len(value) == 4:
+        return QuaternionOrPoint(*value)
+    if len(value) == 16:
+        return Matrix(value)
+    return value
 
 
 class _Attribute(object):
@@ -135,44 +341,26 @@ class _Attribute(object):
         self._path = path
         self._setterKwargs = {}
 
+        # noinspection PyBroadException
         try:
             t = cmds.getAttr(str(self._path), type=True)
-        # noinspection PyBroadException
         except:
             if _debug:
-                wanings.warn('Unknown attr type at %s' % self._path)
+                warnings.warn('Unknown attr type at %s' % self._path)
             return
 
-        if t in ('short2',
-                 'short3',
-                 'long2',
-                 'long3',
-                 'Int32Array',
-                 'float2',
-                 'float3',
-                 'double2',
-                 'double3',
-                 'doubleArray',
-                 'matrix',
-                 'pointArray',
-                 'vectorArray',
-                 'string',
-                 'stringArray',
-                 'sphere',
-                 'cone',
-                 'reflectanceRGB',
-                 'spectrumRGB',
-                 'componentList',
-                 'attributeAlias',
-                 'nurbsCurve',
-                 'nurbsSurface',
-                 'nurbsTrimface',
-                 'polyFace',
-                 'mesh',
-                 'lattice'):
+        if t in (
+                'short2', 'short3', 'long2', 'long3', 'Int32Array', 'float2', 'float3', 'double2', 'double3',
+                'doubleArray', 'matrix', 'pointArray', 'vectorArray', 'string', 'stringArray', 'sphere', 'cone',
+                'reflectanceRGB',
+                'spectrumRGB', 'componentList', 'attributeAlias', 'nurbsCurve', 'nurbsSurface', 'nurbsTrimface',
+                'polyFace', 'mesh', 'lattice'):
             self._setterKwargs['type'] = t
 
-    def __call__(self):
+    def __call__(self, *args):
+        if args:
+            raise AttributeError('Attempting to get an attribute %s, but you are passing attributes into the getter.'
+                                 'Are you trying to call a function and misspelled something?' % self)
         return self.get()
 
     def __getattr__(self, item):
@@ -211,6 +399,11 @@ class _Attribute(object):
     def __repr__(self):
         return self._path + ' : ' + self.__class__.__name__  # so we can easily throw Attribute() objects into maya functions
 
+    def __eq__(self, other):
+        if isinstance(other, _Attribute):
+            return self._path == other._path
+        return False
+
     def connect(self, destination):
         cmds.connectAttr(self._path, str(destination), force=True)
 
@@ -222,13 +415,17 @@ class _Attribute(object):
         cmds.disconnectAttr(self._path, str(destination))
 
     def connections(self, s=True, d=True, asNode=False):
-        return [_Attribute(at) for at in cmds.listConnections(self._path, s=s, d=d, p=not asNode, sh=True) or []]
+        return cmds.listConnections(self._path, s=s, d=d, p=not asNode, sh=True) or []
 
     def isConnected(self):
         return bool(cmds.listConnections(self._path, s=True, d=True))
 
     def get(self):
-        return cmds.getAttr(self._path)
+        ret = cmds.getAttr(self._path)
+        # hacky solution around maya transform attributes returning a list of 1 tuple
+        if isinstance(ret, list) and len(ret) == 1 and isinstance(ret[0], tuple):
+            ret = ret[0]
+        return _wrapMathObjects(ret)
 
     def set(self, *args, **kwargs):
         assert args
@@ -278,6 +475,12 @@ class _Attribute(object):
         cmds.setAttr(self._path, channelBox=cb)
 
 
+class _Transform_Rotate_Attribute(_Attribute):
+    def get(self):
+        angles = cmds.getAttr(self._path)[0]
+        return Euler(angles[0], angles[1], angles[2], cmds.getAttr(self._path.split('.', 1)[0] + '.rotateOrder'))
+
+
 class DependNode(object):
     """
     NOTE: This class implements __setattr__, as such any members assigned to self
@@ -294,9 +497,15 @@ class DependNode(object):
     _MFnDependencyNode = MFnDependencyNode()  # I don't want to create new objects every time we get the name
     _apiObjectHelper = _oldMSelectionList()
 
+    @staticmethod
+    def fnInstance():
+        return DependNode._MFnDependencyNode
+
     @classmethod
     def pool(cls, nodeName, nodeType):
-        key = cmds.ls(nodeName, uuid=True)[0]
+        # Using internal Maya cmds to avoid recursive calls (wrapped cmds.ls() constructs DependNode objects when necessary)
+        # noinspection PyUnresolvedReferences
+        key = _cmds.ls(nodeName, uuid=True)[0]
         inst = DependNode._instances.get(key, None)
         if inst is None:
             inst = cls(nodeName, nodeType)
@@ -306,13 +515,19 @@ class DependNode(object):
     def __init__(self, nodeName, nodeType):
         assert isinstance(nodeName, basestring)
         self.__type = nodeType
-        if cmds.ls(nodeName, l=True)[0][0] == '|':
+        # Using internal Maya cmds to avoid recursive calls (wrapped cmds.ls() constructs DependNode objects when necessary)
+        # noinspection PyUnresolvedReferences
+        if _cmds.ls(nodeName, l=True)[0][0] == '|':
             self.__handle = _getMDagPath(nodeName)
             assert self.__handle.isValid()
         else:
             self.__handle = _getMObject(nodeName)
 
+    def __len__(self):
+        return len(str(self))
+
     def __apiobject__(self):
+        assert cmds.objExists(self._nodeName)
         _oldMGlobal.getSelectionListByName(self._nodeName, self._apiObjectHelper)
         o = _oldMObject()
         self._apiObjectHelper.getDependNode(0, o)
@@ -330,6 +545,11 @@ class DependNode(object):
             return self.__handle.fullPathName()
         self._MFnDependencyNode.setObject(self.__handle)
         return self._MFnDependencyNode.name()
+
+    def __eq__(self, other):
+        if isinstance(other, DependNode):
+            return self._nodeName == other._nodeName
+        return False
 
     def rename(self, newName):
         cmds.rename(self._nodeName, newName)
@@ -365,20 +585,8 @@ class DependNode(object):
         if 'type' in kwargs:
             t = kwargs['type']
             del kwargs['type']
-            if t in ['string',
-                     'stringArray',
-                     'matrix',
-                     'reflectanceRGB',
-                     'spectrumRGB',
-                     'doubleArray',
-                     'floatArray',
-                     'Int32Array',
-                     'vectorArray',
-                     'nurbsCurve',
-                     'nurbsSurface',
-                     'mesh',
-                     'lattice',
-                     'pointArray']:
+            if t in ('string', 'stringArray', 'matrix', 'reflectanceRGB', 'spectrumRGB', 'doubleArray', 'floatArray',
+                     'Int32Array', 'vectorArray', 'nurbsCurve', 'nurbsSurface', 'mesh', 'lattice', 'pointArray'):
                 kwargs['dt'] = t
             else:
                 kwargs['at'] = t
@@ -388,8 +596,9 @@ class DependNode(object):
         return [_Attribute(self._nodeName + '.' + attr) for attr in cmds.listAttr(self._nodeName, ud=ud)]
 
     def isShape(self):
-        return self.__type in ['nurbsCurve', 'nurbsSurface', 'mesh', 'follicle', 'RigSystemControl',
-                               'distanceDimShape', 'cMuscleKeepOut', 'cMuscleObject']
+        return self.__type in (
+            'nurbsCurve', 'nurbsSurface', 'mesh', 'follicle', 'RigSystemControl', 'distanceDimShape', 'cMuscleKeepOut',
+            'cMuscleObject')
 
 
 class DagNode(DependNode):
@@ -409,21 +618,20 @@ class DagNode(DependNode):
 class Transform(DagNode):
     # Note the base class implements __setattr__, so we should not introduce new member variables, only functions.
     def shape(self):
-        c = cmds.listRelatives(self._nodeName, c=True, f=True, type='shape') or []
-        if c:
-            return wrapNode(c[0])
+        return (cmds.listRelatives(self._nodeName, c=True, f=True, type='shape') or [None])[0]
 
     def shapes(self):
-        return [wrapNode(c) for c in (cmds.listRelatives(self._nodeName, c=True, f=True, type='shape') or [])]
+        return cmds.listRelatives(self._nodeName, c=True, f=True, type='shape') or []
 
     def _children(self):
-        return cmds.listRelatives(self._nodeName, c=True, f=True) or []
+        # noinspection PyUnresolvedReferences
+        return _cmds.listRelatives(self._nodeName, c=True, f=True) or []
 
     def children(self):
-        return [wrapNode(child) for child in self._children()]
+        return cmds.listRelatives(self._nodeName, c=True, f=True) or []
 
     def allDescendants(self):
-        return [wrapNode(child) for child in cmds.listRelatives(self._nodeName, ad=True, f=True)]
+        return cmds.listRelatives(self._nodeName, ad=True, f=True) or []
 
     def numChildren(self):
         return len(self._children())
@@ -432,7 +640,7 @@ class Transform(DagNode):
         return wrapNode(self._children()[index])
 
     def getT(self, ws=False):
-        return MVector(*cmds.xform(self._nodeName, q=True, ws=ws, t=True))
+        return Vector(*cmds.xform(self._nodeName, q=True, ws=ws, t=True))
 
     def getM(self, ws=False):
         return Matrix(cmds.xform(self._nodeName, q=True, ws=ws, m=True))
@@ -442,6 +650,11 @@ class Transform(DagNode):
 
     def setM(self, m, ws=False):
         return cmds.xform(self._nodeName, ws=ws, m=[m[i] for i in xrange(16)])
+
+    def __getattr__(self, attr):
+        if attr == 'rotate':
+            return _Transform_Rotate_Attribute(self._nodeName + '.' + attr)
+        return _Attribute(self._nodeName + '.' + attr)
 
 
 class Joint(Transform):
@@ -476,27 +689,41 @@ _wrapperTypes = {
     'follicle': Shape,
     'RigSystemControl': Shape,
     'distanceDimShape': Shape,
-    'locator': DagNode,
+    'locator': Shape,
     'cMuscleKeepOut': Shape,
     'cMuscleObject': Shape,
     'camera': Shape,
+    'annotationShape' : Shape,
 }
 
 
 def wrapNode(nodeName):
+    if isinstance(nodeName, basestring) and '.' in nodeName:
+        nodeName, suffix = nodeName.split('.', 1)
+        result = wrapNode(nodeName)
+        if result is None:
+            return None
+        return getattr(result, suffix)
     if not cmds.objExists(nodeName):
         return None
-    nodeType = cmds.nodeType(nodeName)
+    # noinspection PyUnresolvedReferences
+    nodeType = _cmds.nodeType(nodeName)
     return _wrapperTypes.get(nodeType, DependNode).pool(nodeName, nodeType)
 
 
 def createNode(nodeType):
-    # note: this is the older version:
-    #      return wrapNode(cmds.createNode(nodeType))
-    # it's replaced because OpenMaya is slightly faster, making gains in speed on big rig creations
-    node = MFnDependencyNode()
-    node.create(nodeType)
-    return wrapNode(node.name())
+    # Api with undo/redo support, we profiled this to be faster than cmds.createNode:
+    # noinspection PyBroadException
+    try:
+        mod = MDGModifier()
+        obj = mod.createNode(nodeType)
+    except:
+        mod = MDagModifier()
+        obj = mod.createNode(nodeType)
+    mod.doIt()
+    DependNode.fnInstance().setObject(obj)
+    node = DependNode.fnInstance().name()
+    return wrapNode(node)
 
 
 def _isStringOrStringList(inObject):
@@ -522,8 +749,8 @@ def getNode(nodeName=None):
     if isinstance(nodeName, (str, unicode, bytes)):
         nodeNames = [nodeName]
         _singleNode = True
-    elif isinstance(nodeName, _oldMObject):
-        nodeFn = OpenMaya.MFnDependencyNode(nodeName)
+    elif isinstance(nodeName, MObject):
+        nodeFn = MFnDependencyNode(nodeName)
         nodeNames = [nodeFn.name()]
         _singleNode = True
     elif _isStringOrStringList(nodeName):
@@ -543,62 +770,31 @@ def selection():
     return getNode()
 
 
-def parents(nodeList):
-    unique_parents = []
-    for node in wrapNode(nodeList):
+def _iter_transforms(nodeList):
+    if not isinstance(nodeList, (list, tuple)):
+        nodeList = [nodeList]
+    for node in nodeList:
+        node = wrapNode(node)
         if not isinstance(node, Transform):
             continue
-        parent = node.parent()
-        if parent not in unique_parents:
-            unique_parents.append(parent)
-    return unique_parents
+        yield node
+
+
+def parents(nodeList):
+    return list({node.parent() for node in _iter_transforms(nodeList)})
 
 
 def children(nodeList):
-    unique_children = []
-    for node in wrapNode(nodeList):
-        if not isinstance(node, Transform):
-            continue
-        for child in node.children():
-            if child not in unique_children:
-                unique_children.append(child)
+    unique_children = set()
+    for node in _iter_transforms(nodeList):
+        for ch in node.children():
+            unique_children.add(ch)
     return unique_children
 
 
-def descendants(nodeList):
-    unique_parents = []
-    for node in wrapNode(nodeList):
-        if not isinstance(node, Transform):
-            continue
-        for child in node.allDescendants():
-            if child not in unique_children:
-                unique_children.append(child)
-    return unique_parents
-
-
-if __name__ == '__main__':
-    # do some tests
-    def tests():
-        print('Running tests.')
-        print('Initializing maya standalone, make sure to run using mayapy.exe.')
-        from maya import standalone
-        standalone.initialize(name='python')
-        transform = createNode('transform')
-        persp_transform = getNode('persp')
-        persp_shape = persp_transform.shape()
-        print(persp_shape)
-        transform.setParent(persp_transform)
-        print(transform)
-        print(transform.parent())
-        print(transform.translate)
-        print(transform.tx())
-        print(transform.translate.get())
-        transform.translate = 10.0, 1.0, 0.0
-        transform.tx.set(2)
-        print(transform.translate())
-        print(transform.tx())
-        cmds.file(rename='C:/Test.ma')
-        print(cmds.file(q=True, sn=True))
-
-
-    tests()
+def allDescendants(nodeList):
+    unique_children = set()
+    for node in _iter_transforms(nodeList):
+        for ch in node.allDescendants():
+            unique_children.add(ch)
+    return unique_children
