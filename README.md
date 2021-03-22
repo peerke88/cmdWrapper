@@ -85,21 +85,63 @@ loc.translate.connect(sphere.translate)
 
 # Use cmdsWrapper.cmds instead of maya.cmds
 ```python
-from maya import cmds
+from maya import cmds, OpenMaya
 
 loc = cmds.spaceLocator()[0]
 sphere = cmds.polySphere()[0]
 cmds.connectAttr("{0}.translate".format(loc), "{0}.translate".format(sphere))
 trsValue = cmds.getAttr("{0}.translate".format(loc))
+
+loc1 = cmds.spaceLocator()[0]
+cmds.setAttr("{0}.translate".format(loc1), 1.303, 2.231, -2.647, type="double3")
+loc2 = cmds.spaceLocator()[0]
+cmds.setAttr("{0}.translate".format(loc2), -1.56, 2.603, .556, type="double3")
+vecA = OpenMaya.MVector(*cmds.xform(loc1, q=1, ws=1, t=1))
+vecB = OpenMaya.MVector(*cmds.xform(loc2, q=1, ws=1, t=1))
+vecA = vecA.normal() 
+vecB.normalize() 
+vecC = vecA ^ vecB  
+loc = cmds.spaceLocator()[0] 
+cmds.setAttr("{0}.translateX".format(loc), vecC[0] )
+cmds.xform(loc, ws=1, t=(vecC[0], vecC[1], vecC[2]))
+
+vecE = vecA ^ vecC
+
+nMat = [0] * 16
+nMat[15] = 1
+for i, vector in enumerate( [vecA, vecE, vecC, OpenMaya.MVector(*cmds.xform(loc1, q=1, ws=1, t=1))] ):
+    for j in xrange( 3 ):
+        nMat[(i*4) + j] =  vector[ j ]
+
+cmds.xform(loc, ws=1, m=nMat)
+
 ```
 
 This becomes:
 
 ```python
-from cmdWrapper import cmds
+from cmdWrapper import cmds, getNode, Vector, Matrix
 
 loc = cmds.spaceLocator()[0]
 sphere = cmds.polySphere()[0]
-loc.translate.connect(sphere.translate)
+loc.translate.connect(sphere.translate) #connection of attributes
 trsValue = loc.translate()
+
+loc1 = cmds.spaceLocator()[0]
+loc1.translate = (1.303, 2.231, -2.647) #assign as variable
+loc2 = cmds.spaceLocator()[0]
+loc2.translate.set(-1.56, 2.603, .556) # set function on attribute
+vecA = loc1.translate() # get attribute as function
+vecB = loc2.translate.get() # get function on attribute
+vecA = vecA.normal() # returned attribute is a tuple as well as an MVector
+vecB.normalize() 
+vecC = vecA ^ vecB # MVector cross
+vecD = vecA.cross(vecB) # seperate function that does the same but more readable
+loc = cmds.spaceLocator()[0] 
+loc.translateX = vecC[0] 
+loc.translate = vecC #assign vector directly to double3 attribute 
+
+vecE = vecA ^ vecC
+nMat = Matrix(vecA.normal()[:] +[0] + vecE.normal()[:] +[0] + vecC.normal()[:]+[0] + loc1.translate()[:] + [1] ) #slice and assign data to matrix
+loc.setM(nMat) #set newly created matrix 
 ```
