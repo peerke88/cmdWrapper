@@ -1,6 +1,6 @@
 import unittest, os, sys, logging, cProfile, random
 
-_basePath = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_basePath = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if not _basePath in sys.path:
     sys.path.insert(0, _basePath)
 
