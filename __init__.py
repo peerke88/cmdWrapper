@@ -41,6 +41,17 @@ from maya.OpenMaya import MSelectionList as _oldMSelectionList
 from maya.OpenMaya import MGlobal as _oldMGlobal
 from maya.OpenMaya import MObject as _oldMObject
 
+import sys
+
+if sys.version_info.major == 2:
+    # Override python 2 with python 3 behaviour so the 'new' names are their faster, iterator based versions
+    class dict(dict):
+        def items(self):
+            return super(dict, self).iteritems()
+    range = xrange
+else:
+    basestring = str
+    
 _debug = False
 
 
@@ -64,7 +75,7 @@ class _Cmd(object):
             return v
 
         args = tuple(unwrap(a) for a in args)
-        for k, a in kwargs.iteritems():
+        for k, a in kwargs.items():
             if isinstance(a, (_Attribute, DependNode)):
                 kwargs[k] = unwrap(a)
         return_value = self.fn(*args, **kwargs)
@@ -125,7 +136,7 @@ def _installMathFunctions(cls, size, wrap_return_attrs=tuple(), ops=None):
         super(cls, self).__setitem__(index, value)
 
     def __iter__(self):
-        for i in xrange(len(self)):
+        for i in range(len(self)):
             yield self[i]
 
     def __eq__(self, other):
@@ -226,6 +237,10 @@ class Matrix(MMatrix):
 
 
 class Vector(MVector):
+    def __init__(self, *args):
+        if len(args) == 1 and isinstance(args[0], MQuaternion): args = args[0].x, args[0].y, args[0].z
+        super(Vector, self).__init__(*args)
+    
     def cross(self, other):
         return self ^ other
 
@@ -249,6 +264,12 @@ class Euler(MEulerRotation):
     def asVector(self):
         return Vector(super(Euler, self).asVector())
 
+    def asRadians(self):
+        return self.x, self.y, self.z
+        
+    def asDegrees(self):
+        return degrees(self.x), degrees(self.y), degrees(self.z)
+
     def __repr__(self):
         return '[%s] %s : %s' % (', '.join(str(self[i]) for i in range(3)), self.order, self.__class__.__name__)
 
@@ -264,14 +285,14 @@ class QuaternionOrPoint(MQuaternion):
             tmp = MPoint(self.x, self.y, self.z, self.w) * other
             self.x, self.y, self.z, self.w = tmp.x, tmp.y, tmp.z, tmp.w
             return self
-        return super(cls, self).__imul__(right)
+        return super(QuaternionOrPoint, self).__imul__(other)
         
     def __mul__(self, other):
         if isinstance(other, MMatrix):
             tmp = MPoint(self.x, self.y, self.z, self.w) * other
             return QuaternionOrPoint(tmp.x, tmp.y, tmp.z, tmp.w)
-        return QuaternionOrPoint(super(cls, self).__mul__(right))
-    # TODO: add MPoint functionality where missing from MQuaternion
+        return QuaternionOrPoint(super(QuaternionOrPoint, self).__mul__(other))
+    
     def asEulerRotation(self): return Euler(super(QuaternionOrPoint, self).asEulerRotation())
 
     def asMatrix(self): return Matrix(super(QuaternionOrPoint, self).asMatrix())
@@ -283,8 +304,7 @@ _installMathFunctions(Matrix, 16, ('transpose', 'inverse', 'adjoint', 'homogeniz
 # noinspection PyTypeChecker
 _installMathFunctions(Vector, 3, ('rotateBy', 'normal', 'transformAsNormal'), '+-*/^')
 # noinspection PyTypeChecker
-_installMathFunctions(Euler, 3, ('inverse', 'reorder', 'bound', 'alternateSolution', 'closestSolution', 'closestCut'),
-                      '+-*')
+_installMathFunctions(Euler, 3, ('inverse', 'reorder', 'bound', 'alternateSolution', 'closestSolution', 'closestCut'), '+-*')
 # noinspection PyTypeChecker
 _installMathFunctions(QuaternionOrPoint, 4, ('normal', 'conjugate', 'inverse', 'log', 'exp'), '+-')
 
@@ -349,12 +369,10 @@ class _Attribute(object):
                 warnings.warn('Unknown attr type at %s' % self._path)
             return
 
-        if t in (
-                'short2', 'short3', 'long2', 'long3', 'Int32Array', 'float2', 'float3', 'double2', 'double3',
-                'doubleArray', 'matrix', 'pointArray', 'vectorArray', 'string', 'stringArray', 'sphere', 'cone',
-                'reflectanceRGB',
-                'spectrumRGB', 'componentList', 'attributeAlias', 'nurbsCurve', 'nurbsSurface', 'nurbsTrimface',
-                'polyFace', 'mesh', 'lattice'):
+        if t in ('short2', 'short3', 'long2', 'long3', 'Int32Array', 'float2', 'float3', 'double2', 'double3',
+                 'doubleArray', 'matrix', 'pointArray', 'vectorArray', 'string', 'stringArray', 'sphere', 'cone',
+                 'reflectanceRGB', 'spectrumRGB', 'componentList', 'attributeAlias', 'nurbsCurve', 'nurbsSurface', 
+                 'nurbsTrimface', 'polyFace', 'mesh', 'lattice'):
             self._setterKwargs['type'] = t
 
     def __call__(self, *args):
@@ -550,6 +568,9 @@ class DependNode(object):
         if isinstance(other, DependNode):
             return self._nodeName == other._nodeName
         return False
+        
+    def __hash__(self):
+        return self._nodeName.__hash__()
 
     def rename(self, newName):
         cmds.rename(self._nodeName, newName)
@@ -649,7 +670,7 @@ class Transform(DagNode):
         return cmds.xform(self._nodeName, ws=ws, t=(t[0], t[1], t[2]))
 
     def setM(self, m, ws=False):
-        return cmds.xform(self._nodeName, ws=ws, m=[m[i] for i in xrange(16)])
+        return cmds.xform(self._nodeName, ws=ws, m=[m[i] for i in range(16)])
 
     def __getattr__(self, attr):
         if attr == 'rotate':
@@ -727,7 +748,7 @@ def createNode(nodeType):
 
 
 def _isStringOrStringList(inObject):
-    if isinstance(inObject, (str, unicode, bytes)):
+    if isinstance(inObject, basestring):
         return True
     if not isinstance(inObject, (list, tuple)):
         return False
@@ -746,7 +767,7 @@ def getNode(nodeName=None):
 
     nodeNames = []
     _singleNode = False
-    if isinstance(nodeName, (str, unicode, bytes)):
+    if isinstance(nodeName, basestring):
         nodeNames = [nodeName]
         _singleNode = True
     elif isinstance(nodeName, MObject):
