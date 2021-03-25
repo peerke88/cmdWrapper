@@ -8,7 +8,7 @@ import maya.standalone
 
 root_logger = logging.getLogger()
 root_logger.disabled = True
-for x, y in logging.Logger.manager.loggerDict.iteritems():
+for x, y in logging.Logger.manager.loggerDict.items():
     try:
         y.setLevel(logging.CRITICAL)
     except Exception as e:

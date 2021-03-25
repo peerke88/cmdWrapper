@@ -381,6 +381,9 @@ class _Attribute(object):
                                  'Are you trying to call a function and misspelled something?' % self)
         return self.get()
 
+    def __hash__(self):
+        return self.name().__hash__()
+
     def __getattr__(self, item):
         return _Attribute(self._path + '.' + item)
 

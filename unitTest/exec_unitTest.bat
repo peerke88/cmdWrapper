@@ -3,7 +3,7 @@ rem simple batch file that allows mayapy to load all unittests based on this fol
 
 set /P mayaVersion="What version of maya do you want to test? "
 
-FOR %%G IN ("2017" "2018" "2019" "2020" "2021") DO ( IF /I "%mayaVersion%"=="%%~G" GOTO MATCH )
+FOR %%G IN ("2017" "2018" "2019" "2020" "2022") DO ( IF /I "%mayaVersion%"=="%%~G" GOTO MATCH )
 
 :NOMATCH
 echo Mayaversion not found
