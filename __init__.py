@@ -48,10 +48,12 @@ if sys.version_info.major == 2:
     class dict(dict):
         def items(self):
             return super(dict, self).iteritems()
+
+
     range = xrange
 else:
     basestring = str
-    
+
 _debug = False
 
 
@@ -178,6 +180,14 @@ def _installMathFunctions(cls, size, wrap_return_attrs=tuple(), ops=None):
         # noinspection PyUnresolvedReferences
         return _wrap(super(cls, self).__div__(right))
 
+    def __truediv__(self, right):
+        # noinspection PyUnresolvedReferences
+        return _wrap(super(cls, self).__truediv__(right))
+
+    def __floordiv__(self, right):
+        # noinspection PyUnresolvedReferences
+        return _wrap(super(cls, self).__floordiv__(right))
+
     cls.__repr__ = __repr__
     cls.__getitem__ = __getitem__
     cls.__setitem__ = __setitem__
@@ -195,6 +205,8 @@ def _installMathFunctions(cls, size, wrap_return_attrs=tuple(), ops=None):
             cls.__mul__ = __mul__
         if '/' in ops:
             cls.__div__ = __div__
+            cls.__truediv__ = __truediv__
+            cls.__floordiv__ = __floordiv__
         if '^' in ops:
             cls.__xor__ = __xor__
 
@@ -240,7 +252,7 @@ class Vector(MVector):
     def __init__(self, *args):
         if len(args) == 1 and isinstance(args[0], MQuaternion): args = args[0].x, args[0].y, args[0].z
         super(Vector, self).__init__(*args)
-    
+
     def cross(self, other):
         return self ^ other
 
@@ -249,7 +261,7 @@ class Vector(MVector):
             # dot product, returns a float
             return super(Vector, self).__mul__(right)
         return self._wrap(super(Vector, self).__mul__(right))
-    
+
     def rotateTo(self, other):
         return QuaternionOrPoint(super(Vector, self).rotateTo(other))
 
@@ -266,7 +278,7 @@ class Euler(MEulerRotation):
 
     def asRadians(self):
         return self.x, self.y, self.z
-        
+
     def asDegrees(self):
         return degrees(self.x), degrees(self.y), degrees(self.z)
 
@@ -286,16 +298,18 @@ class QuaternionOrPoint(MQuaternion):
             self.x, self.y, self.z, self.w = tmp.x, tmp.y, tmp.z, tmp.w
             return self
         return super(QuaternionOrPoint, self).__imul__(other)
-        
+
     def __mul__(self, other):
         if isinstance(other, MMatrix):
             tmp = MPoint(self.x, self.y, self.z, self.w) * other
             return QuaternionOrPoint(tmp.x, tmp.y, tmp.z, tmp.w)
         return QuaternionOrPoint(super(QuaternionOrPoint, self).__mul__(other))
-    
-    def asEulerRotation(self): return Euler(super(QuaternionOrPoint, self).asEulerRotation())
 
-    def asMatrix(self): return Matrix(super(QuaternionOrPoint, self).asMatrix())
+    def asEulerRotation(self):
+        return Euler(super(QuaternionOrPoint, self).asEulerRotation())
+
+    def asMatrix(self):
+        return Matrix(super(QuaternionOrPoint, self).asMatrix())
 
 
 # TODO: If this is slow to import maybe we need to write it all out so it's just all one big pyc instead of a bunch of dynamic changes
@@ -371,7 +385,7 @@ class _Attribute(object):
 
         if t in ('short2', 'short3', 'long2', 'long3', 'Int32Array', 'float2', 'float3', 'double2', 'double3',
                  'doubleArray', 'matrix', 'pointArray', 'vectorArray', 'string', 'stringArray', 'sphere', 'cone',
-                 'reflectanceRGB', 'spectrumRGB', 'componentList', 'attributeAlias', 'nurbsCurve', 'nurbsSurface', 
+                 'reflectanceRGB', 'spectrumRGB', 'componentList', 'attributeAlias', 'nurbsCurve', 'nurbsSurface',
                  'nurbsTrimface', 'polyFace', 'mesh', 'lattice'):
             self._setterKwargs['type'] = t
 
@@ -398,6 +412,9 @@ class _Attribute(object):
 
     def __setitem__(self, index, value):
         self[index].set(value)
+
+    def __iter__(self):
+        raise NotImplementedError
 
     def numElements(self):
         return cmds.getAttr(self._path, size=True)
@@ -450,8 +467,11 @@ class _Attribute(object):
 
     def set(self, *args, **kwargs):
         assert args
-        if len(args) == 1 and hasattr(args[0], '__iter__') and not isinstance(args[0], basestring):
-            args = tuple(args[0])
+        if len(args) == 1:
+            if isinstance(args[0], _Attribute):
+                args = self.unpack(args[0])
+            elif hasattr(args[0], '__iter__') and not isinstance(args[0], basestring):
+                args = tuple(args[0])
         kwargs.update(self._setterKwargs)
         cmds.setAttr(self._path, *args, **kwargs)
 
@@ -494,6 +514,75 @@ class _Attribute(object):
                 attr.setChannelBox(cb, False)
                 return
         cmds.setAttr(self._path, channelBox=cb)
+
+    @classmethod
+    def unpack(cls, value):
+        return value() if isinstance(value, cls) else value
+
+    def __iadd__(self, other):
+        other = self.unpack(other)
+        self.set(self() + other)
+        return self
+
+    def __isub__(self, other):
+        other = self.unpack(other)
+        self.set(self() - other)
+        return self
+
+    def __imul__(self, other):
+        other = self.unpack(other)
+        self.set(self() * other)
+        return self
+
+    def __idiv__(self, other):
+        other = self.unpack(other)
+        self.set(self() / other)
+        return self
+
+    def __itruediv__(self, other):
+        other = self.unpack(other)
+        self.set(self() / other)
+        return self
+
+    def __ifloordiv__(self, other):
+        other = self.unpack(other)
+        self.set(self() // other)
+        return self
+
+    def __ipow__(self, other):
+        other = self.unpack(other)
+        self.set(self() ** other)
+        return self
+
+    def __imod__(self, other):
+        other = self.unpack(other)
+        self.set(self() % other)
+        return self
+
+    def __ixor__(self, other):
+        other = self.unpack(other)
+        self.set(self() ^ other)
+        return self
+
+    def __ior__(self, other):
+        other = self.unpack(other)
+        self.set(self() ^ other)
+        return self
+
+    def __iand__(self, other):
+        other = self.unpack(other)
+        self.set(self() ^ other)
+        return self
+
+    def __ilshift__(self, other):
+        other = self.unpack(other)
+        self.set(self() << other)
+        return self
+
+    def __irshift__(self, other):
+        other = self.unpack(other)
+        self.set(self() << other)
+        return self
 
 
 class _Transform_Rotate_Attribute(_Attribute):
@@ -571,7 +660,7 @@ class DependNode(object):
         if isinstance(other, DependNode):
             return self._nodeName == other._nodeName
         return False
-        
+
     def __hash__(self):
         return self._nodeName.__hash__()
 
@@ -717,7 +806,7 @@ _wrapperTypes = {
     'cMuscleKeepOut': Shape,
     'cMuscleObject': Shape,
     'camera': Shape,
-    'annotationShape' : Shape,
+    'annotationShape': Shape,
 }
 
 
