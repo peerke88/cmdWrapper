@@ -470,6 +470,8 @@ class _Attribute(object):
         if len(args) == 1:
             if isinstance(args[0], _Attribute):
                 args = self.unpack(args[0])
+                if not hasattr(args, '__iter__'):
+                    args = (args,)
             elif hasattr(args[0], '__iter__') and not isinstance(args[0], basestring):
                 args = tuple(args[0])
         kwargs.update(self._setterKwargs)
