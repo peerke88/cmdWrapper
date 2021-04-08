@@ -375,7 +375,6 @@ class _Attribute(object):
         self._path = path
         self._setterKwargs = {}
 
-        # noinspection PyBroadException
         try:
             t = cmds.getAttr(str(self._path), type=True)
         except:
@@ -414,7 +413,8 @@ class _Attribute(object):
         self[index].set(value)
 
     def __iter__(self):
-        raise NotImplementedError
+        # Python generates a default __iter__ function and we don't want that.
+        raise RuntimeError()
 
     def numElements(self):
         return cmds.getAttr(self._path, size=True)
@@ -468,11 +468,7 @@ class _Attribute(object):
     def set(self, *args, **kwargs):
         assert args
         if len(args) == 1:
-            if isinstance(args[0], _Attribute):
-                args = self.unpack(args[0])
-                if not hasattr(args, '__iter__'):
-                    args = (args,)
-            elif hasattr(args[0], '__iter__') and not isinstance(args[0], basestring):
+            if hasattr(args[0], '__iter__') and not isinstance(args[0], basestring):
                 args = tuple(args[0])
         kwargs.update(self._setterKwargs)
         cmds.setAttr(self._path, *args, **kwargs)
@@ -516,75 +512,6 @@ class _Attribute(object):
                 attr.setChannelBox(cb, False)
                 return
         cmds.setAttr(self._path, channelBox=cb)
-
-    @classmethod
-    def unpack(cls, value):
-        return value() if isinstance(value, cls) else value
-
-    def __iadd__(self, other):
-        other = self.unpack(other)
-        self.set(self() + other)
-        return self
-
-    def __isub__(self, other):
-        other = self.unpack(other)
-        self.set(self() - other)
-        return self
-
-    def __imul__(self, other):
-        other = self.unpack(other)
-        self.set(self() * other)
-        return self
-
-    def __idiv__(self, other):
-        other = self.unpack(other)
-        self.set(self() / other)
-        return self
-
-    def __itruediv__(self, other):
-        other = self.unpack(other)
-        self.set(self() / other)
-        return self
-
-    def __ifloordiv__(self, other):
-        other = self.unpack(other)
-        self.set(self() // other)
-        return self
-
-    def __ipow__(self, other):
-        other = self.unpack(other)
-        self.set(self() ** other)
-        return self
-
-    def __imod__(self, other):
-        other = self.unpack(other)
-        self.set(self() % other)
-        return self
-
-    def __ixor__(self, other):
-        other = self.unpack(other)
-        self.set(self() ^ other)
-        return self
-
-    def __ior__(self, other):
-        other = self.unpack(other)
-        self.set(self() ^ other)
-        return self
-
-    def __iand__(self, other):
-        other = self.unpack(other)
-        self.set(self() ^ other)
-        return self
-
-    def __ilshift__(self, other):
-        other = self.unpack(other)
-        self.set(self() << other)
-        return self
-
-    def __irshift__(self, other):
-        other = self.unpack(other)
-        self.set(self() << other)
-        return self
 
 
 class _Transform_Rotate_Attribute(_Attribute):
@@ -681,17 +608,11 @@ class DependNode(object):
             return
         getattr(self, attr).set(value)
 
-    def plug(self, attr):  # TODO: Refactor this away
-        return getattr(self, attr)
-
     def __str__(self):
         return self._nodeName  # so we can easily throw DependNode() objects into maya functions
 
     def __repr__(self):
         return self._nodeName + ' : ' + self.__class__.__name__  # so we can easily throw DependNode() objects into maya functions
-
-    def asMObject(self):  # TODO: Refactor this away by making getMObject public
-        return _getMObject(self._nodeName)
 
     def type(self):
         return self.__type
@@ -714,6 +635,12 @@ class DependNode(object):
         return self.__type in (
             'nurbsCurve', 'nurbsSurface', 'mesh', 'follicle', 'RigSystemControl', 'distanceDimShape', 'cMuscleKeepOut',
             'cMuscleObject')
+
+    def plug(self, attr):  # TODO: Refactor this away
+        return getattr(self, attr)
+
+    def asMObject(self):  # TODO: Refactor this away by making getMObject public
+        return _getMObject(self._nodeName)
 
 
 class DagNode(DependNode):
