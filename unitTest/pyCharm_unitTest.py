@@ -74,6 +74,13 @@ class TestCmds(unittest.TestCase):
         crc = cmds.circle()[0]
         self.assertEqual(cmds.ls('%s[*]' % crc.cv, fl=True), getNode(['|nurbsCircle1.cv[%i]' % i for i in range(8)]))
 
+        circle = cmds.circle()[0]
+        transform = cmds.createNode("transform", n = "testing")
+        circle.shape().setParent(transform, shape = True)
+        self.assertEqual(transform.shape(), circle.shape())
+        # cmds.delete(circle)
+        # print transform.shape()
+
     def test_attributes(self):
         # import wrappers
         from cmdWrapper import cmds, Vector, Matrix
@@ -156,9 +163,41 @@ class TestCmds(unittest.TestCase):
         decomp = cmds.createNode("decomposeMatrix")
         mat = decomp.outputQuat().asMatrix()
         d = c * mat
+        self.assertEqual(Vector(mat[12:15]), mat.asT())
         self.assertEqual(mat, Matrix())
         self.assertEqual(mat.axis(0), Vector(1,0,0))
+        testVec = Vector(1,-2, 5)
+        mat[12] = testVec.x
+        mat[13] = testVec[1]
+        mat[14] = testVec.z
+        self.assertEqual(Vector(mat[12:15]), testVec)
+        self.assertFalse(Vector() == 1)
 
+        nVec = Vector(1,0,0) * Matrix()
+   
+        vec = Vector()
+        vec[0:2] = (1,1)
+        self.assertEqual(vec-Vector(1,1,0), Vector())
+        transform = cmds.createNode("transform", n = "testTransform")
+        transform1 = cmds.createNode("transform", n = "testTransform1")
+        transform.translate = (1.0, 2.0, 3.0)
+        transform.translate.connect(transform1.translate)
+        vec = transform1.translate()
+        self.assertEqual(vec, Vector(1.0, 2.0, 3.0))
+        self.assertTrue(transform1.translate.isDestination())
+        self.assertFalse(transform.translate.isDestination())
+        transform1.translate.disconnectInputs()
+        self.assertFalse(transform1.translate.isConnected())
+        self.assertFalse(transform.translate.isKeyable())
+        self.assertTrue(transform.translateX.isKeyable())
+
+        cmds.addAttr(transform1, ln="test", proxy=transform.translateX)
+        self.assertTrue(transform1.test.isProxy())
+
+        rot = transform.rotate()
+        self.assertEqual(rot, Euler())
+        # vec = transform.translate()
+        # print vec
 
 if __name__ == '__main__':
     unittest.main()

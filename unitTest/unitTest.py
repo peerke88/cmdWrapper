@@ -58,7 +58,6 @@ def testctx():
         cov.stop()
         cov.save()
         cov.html_report()
-        webbrowser.open(os.path.join(_basePath, r"unitTest/htmlcov/index.html"))
         
     return test
 

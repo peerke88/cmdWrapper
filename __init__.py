@@ -133,7 +133,7 @@ def _installMathFunctions(cls, size, wrap_return_attrs=tuple(), ops=None):
             a = 0 if index.start is None else index.start
             b = len(self) if index.stop is None else index.stop
             c = 1 if index.step is None else index.step
-            list(super(cls, self).__setitem__(i) for i, v in zip(range(a, b, c), value))
+            list(super(cls, self).__setitem__(i, v) for i, v in zip(range(a, b, c), value))
             return
         super(cls, self).__setitem__(index, value)
 
