@@ -30,26 +30,32 @@ Read more over at https://github.com/peerke88/cmdWrapper
 import warnings
 import functools
 
-from math import degrees
+from math import de`grees
 
 # noinspection PyUnresolvedReferences
 from maya.api.OpenMaya import MMatrix, MVector, MTransformationMatrix, MGlobal, MFnTypedAttribute, MDagPath, \
     MFnDependencyNode, MDGModifier, MDagModifier, MObject, MEulerRotation, MAngle, MPoint, MQuaternion
+# noinspection PyUnresolvedReferences
 from maya import cmds as _cmds
-
+# noinspection PyUnresolvedReferences
 from maya.OpenMaya import MSelectionList as _oldMSelectionList
+# noinspection PyUnresolvedReferences
 from maya.OpenMaya import MGlobal as _oldMGlobal
+# noinspection PyUnresolvedReferences
 from maya.OpenMaya import MObject as _oldMObject
 
 import sys
 
 if sys.version_info.major == 2:
     # Override python 2 with python 3 behaviour so the 'new' names are their faster, iterator based versions
+    # noinspection PyShadowingBuiltins
     class dict(dict):
         def items(self):
+            # noinspection PyUnresolvedReferences
             return super(dict, self).iteritems()
 
 
+    # noinspection PyUnresolvedReferences, PyShadowingBuiltins
     range = xrange
 else:
     basestring = str
@@ -114,27 +120,30 @@ def _wrapReturnValue(cls, fn, *args, **kwargs):
     return cls(fn(*args, **kwargs))
 
 
-def _installMathFunctions(cls, size, wrap_return_attrs=tuple(), ops=None):
+def _installMathFunctions(cls, size, wrap_return_attrs, ops):
+    # type: (type, int, tuple, str)->None
     def __repr__(self):
         return '[%s] : %s' % (', '.join(str(self[i]) for i in range(size)), self.__class__.__name__)
 
-    # noinspection PyUnresolvedReferences
     def __getitem__(self, index):
         if isinstance(index, slice):
             a = 0 if index.start is None else index.start
             b = len(self) if index.stop is None else index.stop
             c = 1 if index.step is None else index.step
+            # noinspection PyUnresolvedReferences
             return list(super(cls, self).__getitem__(i) for i in range(a, b, c))
+        # noinspection PyUnresolvedReferences
         return super(cls, self).__getitem__(index)
 
-    # noinspection PyUnresolvedReferences
     def __setitem__(self, index, value):
         if isinstance(index, slice):
             a = 0 if index.start is None else index.start
             b = len(self) if index.stop is None else index.stop
             c = 1 if index.step is None else index.step
+            # noinspection PyUnresolvedReferences
             list(super(cls, self).__setitem__(i, v) for i, v in zip(range(a, b, c), value))
             return
+        # noinspection PyUnresolvedReferences
         super(cls, self).__setitem__(index, value)
 
     def __iter__(self):
@@ -250,7 +259,8 @@ class Matrix(MMatrix):
 
 class Vector(MVector):
     def __init__(self, *args):
-        if len(args) == 1 and isinstance(args[0], MQuaternion): args = args[0].x, args[0].y, args[0].z
+        if len(args) == 1 and isinstance(args[0], MQuaternion):
+            args = args[0].x, args[0].y, args[0].z
         super(Vector, self).__init__(*args)
 
     def cross(self, other):
@@ -288,8 +298,10 @@ class Euler(MEulerRotation):
 
 class QuaternionOrPoint(MQuaternion):
     def __init__(self, *args):
-        if len(args) == 1 and isinstance(args[0], MVector): args = args[0].x, args[0].y, args[0].z, 1.0
-        if len(args) == 3: args += (1,)
+        if len(args) == 1 and isinstance(args[0], MVector):
+            args = args[0].x, args[0].y, args[0].z, 1.0
+        if len(args) == 3:
+            args += (1,)
         super(QuaternionOrPoint, self).__init__(*args)
 
     def __imul__(self, other):
@@ -313,13 +325,9 @@ class QuaternionOrPoint(MQuaternion):
 
 
 # TODO: If this is slow to import maybe we need to write it all out so it's just all one big pyc instead of a bunch of dynamic changes
-# noinspection PyTypeChecker
 _installMathFunctions(Matrix, 16, ('transpose', 'inverse', 'adjoint', 'homogenize'), '+-*')
-# noinspection PyTypeChecker
 _installMathFunctions(Vector, 3, ('rotateBy', 'normal', 'transformAsNormal'), '+-*/^')
-# noinspection PyTypeChecker
 _installMathFunctions(Euler, 3, ('inverse', 'reorder', 'bound', 'alternateSolution', 'closestSolution', 'closestCut'), '+-*')
-# noinspection PyTypeChecker
 _installMathFunctions(QuaternionOrPoint, 4, ('normal', 'conjugate', 'inverse', 'log', 'exp'), '+-')
 
 # TODO: Maybe these should all be properties that return a copy to avoid user error in changing these 'constants'
@@ -375,6 +383,7 @@ class _Attribute(object):
         self._path = path
         self._setterKwargs = {}
 
+        # noinspection PyBroadException
         try:
             t = cmds.getAttr(str(self._path), type=True)
         except:
@@ -543,19 +552,28 @@ class DependNode(object):
     @classmethod
     def pool(cls, nodeName, nodeType):
         # Using internal Maya cmds to avoid recursive calls (wrapped cmds.ls() constructs DependNode objects when necessary)
-        # noinspection PyUnresolvedReferences
         key = _cmds.ls(nodeName, uuid=True)[0]
         inst = DependNode._instances.get(key, None)
         if inst is None:
             inst = cls(nodeName, nodeType)
             DependNode._instances[key] = inst
+        elif not inst.valid():
+            inst.updateHandle(nodeName)
         return inst
 
     def __init__(self, nodeName, nodeType):
         assert isinstance(nodeName, basestring)
         self.__type = nodeType
         # Using internal Maya cmds to avoid recursive calls (wrapped cmds.ls() constructs DependNode objects when necessary)
-        # noinspection PyUnresolvedReferences
+        self.__handle = None
+        self.updateHandle(nodeName)
+
+    def valid(self):
+        if isinstance(self.__handle, MDagPath):
+            return self.__handle.isValid()
+        return self.__handle.isNull()
+
+    def updateHandle(self, nodeName):
         if _cmds.ls(nodeName, l=True)[0][0] == '|':
             self.__handle = _getMDagPath(nodeName)
             assert self.__handle.isValid()
@@ -656,6 +674,9 @@ class DagNode(DependNode):
             return
         cmds.parent(self._nodeName, parent)
 
+    def shortName(self):
+        return self._nodeName.rsplit('|', 1)[-1]
+
 
 class Transform(DagNode):
     # Note the base class implements __setattr__, so we should not introduce new member variables, only functions.
@@ -666,7 +687,6 @@ class Transform(DagNode):
         return cmds.listRelatives(self._nodeName, c=True, f=True, type='shape') or []
 
     def _children(self):
-        # noinspection PyUnresolvedReferences
         return _cmds.listRelatives(self._nodeName, c=True, f=True) or []
 
     def children(self):
@@ -748,7 +768,6 @@ def wrapNode(nodeName):
         return getattr(result, suffix)
     if not cmds.objExists(nodeName):
         return None
-    # noinspection PyUnresolvedReferences
     nodeType = _cmds.nodeType(nodeName)
     return _wrapperTypes.get(nodeType, DependNode).pool(nodeName, nodeType)
 
