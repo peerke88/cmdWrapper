@@ -30,7 +30,7 @@ Read more over at https://github.com/peerke88/cmdWrapper
 import warnings
 import functools
 
-from math import de`grees
+from math import degrees
 
 # noinspection PyUnresolvedReferences
 from maya.api.OpenMaya import MMatrix, MVector, MTransformationMatrix, MGlobal, MFnTypedAttribute, MDagPath, \
