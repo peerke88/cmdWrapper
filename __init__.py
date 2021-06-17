@@ -33,8 +33,8 @@ import functools
 from math import degrees
 
 # noinspection PyUnresolvedReferences
-from maya.api.OpenMaya import MMatrix, MVector, MTransformationMatrix, MGlobal, MFnTypedAttribute, MDagPath, \
-    MFnDependencyNode, MDGModifier, MDagModifier, MObject, MEulerRotation, MAngle, MPoint, MQuaternion
+from maya.api.OpenMaya import MMatrix, MVector, MTransformationMatrix, MGlobal, MDagPath, \
+    MFnDependencyNode, MDGModifier, MDagModifier, MObject, MEulerRotation, MPoint, MQuaternion, MFnAttribute
 # noinspection PyUnresolvedReferences
 from maya import cmds as _cmds
 # noinspection PyUnresolvedReferences
@@ -53,7 +53,6 @@ if sys.version_info.major == 2:
         def items(self):
             # noinspection PyUnresolvedReferences
             return super(dict, self).iteritems()
-
 
     # noinspection PyUnresolvedReferences, PyShadowingBuiltins
     range = xrange
@@ -434,8 +433,16 @@ class _Attribute(object):
     def isKeyable(self):
         return cmds.getAttr(self._path, keyable=True)
 
+    def isLocked(self):
+        return cmds.getAttr(self._path, lock=True)
+
     def isProxy(self):
-        return cmds.getAttr(self._path, keyable=True)
+        _node, _attr = self._path.split('.', 1)
+        _depNode = MFnDependencyNode(_getMObject(_node))
+        return MFnAttribute(_depNode.findPlug(_attr, False).attribute()).isProxyAttribute
+
+    def isChannelBox(self):
+        return cmds.getAttr(self._path, channelBox=True)
 
     def isDestination(self):
         return bool(cmds.listConnections(self._path, s=True, d=False))
@@ -650,9 +657,7 @@ class DependNode(object):
         return [_Attribute(self._nodeName + '.' + attr) for attr in cmds.listAttr(self._nodeName, ud=ud)]
 
     def isShape(self):
-        return self.__type in (
-            'nurbsCurve', 'nurbsSurface', 'mesh', 'follicle', 'RigSystemControl', 'distanceDimShape', 'cMuscleKeepOut',
-            'cMuscleObject')
+        return self.__type in [key for key in _wrapperTypes.keys() if Shape == _wrapperTypes[key]]
 
     def plug(self, attr):  # TODO: Refactor this away
         return getattr(self, attr)
@@ -698,7 +703,7 @@ class Transform(DagNode):
     def numChildren(self):
         return len(self._children())
 
-    def child(self, index):
+    def child(self, index=0):
         return wrapNode(self._children()[index])
 
     def getT(self, ws=False):
@@ -725,7 +730,7 @@ class Joint(Transform):
         if ws:
             parentInverseMatrix = cmds.getAttr(self._nodeName + '.parentInverseMatrix')
         else:
-            s = cmds.getAttr(self._nodeName + '.is')
+            s = cmds.getAttr(self._nodeName + '.is')[0]
             parentInverseMatrix = [s[0], 0.0, 0.0, 0.0,
                                    0.0, s[1], 0.0, 0.0,
                                    0.0, 0.0, s[2], 0.0,
@@ -803,7 +808,9 @@ def getNode(nodeName=None):
         if not curSelection:
             warnings.warn('no nodeName given and no object selected in maya!')
             return []
-        nodeName = curSelection
+        if len(curSelection) == 1:
+            return curSelection[0]
+        return curSelection
 
     nodeNames = []
     _singleNode = False

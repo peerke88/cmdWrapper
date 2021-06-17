@@ -1,4 +1,4 @@
-import unittest, os, sys, logging, cProfile, random, webbrowser
+import unittest, os, sys, logging, cProfile
 
 _basePath = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if not _basePath in sys.path:
@@ -11,10 +11,10 @@ root_logger.disabled = True
 for x, y in logging.Logger.manager.loggerDict.items():
     try:
         y.setLevel(logging.CRITICAL)
-    except Exception as e:
+    except Exception:
         pass
 
-## disable the crash reporting window.
+# disable the crash reporting window.
 os.environ["MAYA_DEBUG_ENABLE_CRASH_REPORTING"] = "0"
 os.environ["PYMEL_SKIP_MEL_INIT"] = "Temp"
 
@@ -27,7 +27,7 @@ try:
     import coverage
     cov = coverage.Coverage(source=['cmdWrapper'])
     cov.start()
-except Exception as err:
+except Exception:
     _coverage = False
 
 _canProfile = True
@@ -36,20 +36,22 @@ try:
 except:
     _canProfile = False
 
-from cmdWrapper import cmds, Vector, Matrix
+from cmdWrapper import cmds
 
-cmds.loadPlugin('matrixNodes',qt=True)
+cmds.loadPlugin('matrixNodes', qt=True)
 cmds.loadPlugin('quatNodes', qt=True)
 
 from cmdWrapper.unitTest.pyCharm_unitTest import TestCmds
 
-## \~english testing context that will fire the unitTests but can be used in a cProfile argument
+# \~english testing context that will fire the unitTests but can be used in a cProfile argument
+
+
 def testctx():
     log_file = 'log_file.txt'
     curDirect = os.path.dirname(__file__)
     file = open(os.path.join(curDirect, log_file), "w")
     suite = unittest.TestSuite()
-    result = unittest.TestResult()
+    # result = unittest.TestResult()
     suite.addTest(unittest.makeSuite(TestCmds))
     runner = unittest.TextTestRunner(file)
     test = runner.run(suite)
@@ -58,8 +60,9 @@ def testctx():
         cov.stop()
         cov.save()
         cov.html_report()
-        
+    print(test)
     return test
+
 
 def runctx(inDef):
     pr = cProfile.Profile()
@@ -92,7 +95,6 @@ def runctx(inDef):
     subprocess.Popen([executable, callGrindProf])
     return result
 
-    
 
 if __name__ == '__main__':
     testObject = runctx(testctx)
