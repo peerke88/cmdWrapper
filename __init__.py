@@ -121,6 +121,11 @@ def _wrapReturnValue(cls, fn, *args, **kwargs):
 
 def _installMathFunctions(cls, size, wrap_return_attrs, ops):
     # type: (type, int, tuple, str)->None
+
+    def __getstate__(self):
+        # make sure this object returns a list so pickle works
+        return [i for i in range(len(self))]
+
     def __repr__(self):
         return '[%s] : %s' % (', '.join(str(self[i]) for i in range(size)), self.__class__.__name__)
 
@@ -427,6 +432,9 @@ class _Attribute(object):
     def numElements(self):
         return cmds.getAttr(self._path, size=True)
 
+    def node(self):
+        return wrapNode(self._path.split('.', 1)[0])
+
     def name(self):
         return self._path.split('.', 1)[-1]
 
@@ -624,6 +632,14 @@ class DependNode(object):
     def hasAttr(self, attr):
         return cmds.objExists(self._nodeName + '.' + attr)
 
+    def __getnewargs__(self):
+        # make sure pickle works, returning info to generate the boject from scratch
+        return (self.__type, self._nodeName)
+
+    def __getstate__(self):
+        # make sure this object returns a list so pickle works
+        return self._nodeName
+
     def __getattr__(self, attr):
         return _Attribute(self._nodeName + '.' + attr)
 
@@ -641,6 +657,9 @@ class DependNode(object):
 
     def type(self):
         return self.__type
+
+    def isType(self, inType):
+        return inType == self.__type
 
     def addAttr(self, longName, **kwargs):
         if 'type' in kwargs:
