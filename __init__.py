@@ -513,28 +513,24 @@ class _Attribute(object):
                     childAttributePath = nodeName + '.' + childAttributeName
                     assert childAttributePath not in stack
                     stack.append(childAttributePath)
-            else:
-                yield self.__class__(item)
+                    yield self.__class__(childAttributePath)
 
     def setLocked(self, lock, leaf=False):
         if leaf:
             for attr in self._recurse():
                 attr.setLocked(lock, False)
-                return
         cmds.setAttr(self._path, lock=lock)
 
     def setKeyable(self, keyable, leaf=False):
         if leaf:
             for attr in self._recurse():
                 attr.setKeyable(keyable, False)
-                return
         cmds.setAttr(self._path, keyable=keyable)
 
     def setChannelBox(self, cb, leaf=False):
         if leaf:
             for attr in self._recurse():
                 attr.setChannelBox(cb, False)
-                return
         cmds.setAttr(self._path, channelBox=cb)
 
 
