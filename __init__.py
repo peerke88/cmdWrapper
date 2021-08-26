@@ -429,6 +429,11 @@ class _Attribute(object):
         # Python generates a default __iter__ function and we don't want that.
         raise RuntimeError()
 
+    def asPlug(self):
+        _node, _attr = self._path.split('.', 1)
+        _depNode = MFnDependencyNode(_getMObject(_node))
+        return _depNode.findPlug(_attr, False)
+
     def numElements(self):
         return cmds.getAttr(self._path, size=True)
 
@@ -445,9 +450,7 @@ class _Attribute(object):
         return cmds.getAttr(self._path, lock=True)
 
     def isProxy(self):
-        _node, _attr = self._path.split('.', 1)
-        _depNode = MFnDependencyNode(_getMObject(_node))
-        return MFnAttribute(_depNode.findPlug(_attr, False).attribute()).isProxyAttribute
+        return MFnAttribute(self._asPlug().attribute()).isProxyAttribute
 
     def isChannelBox(self):
         return cmds.getAttr(self._path, channelBox=True)
