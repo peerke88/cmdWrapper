@@ -434,6 +434,9 @@ class _Attribute(object):
         _depNode = MFnDependencyNode(_getMObject(_node))
         return _depNode.findPlug(_attr, False)
 
+    def asMfnAttr(self):
+        return MFnAttribute(self._asPlug().attribute())
+
     def numElements(self):
         return cmds.getAttr(self._path, size=True)
 
@@ -450,7 +453,7 @@ class _Attribute(object):
         return cmds.getAttr(self._path, lock=True)
 
     def isProxy(self):
-        return MFnAttribute(self._asPlug().attribute()).isProxyAttribute
+        return self.asMfnAttr().isProxyAttribute
 
     def isChannelBox(self):
         return cmds.getAttr(self._path, channelBox=True)
