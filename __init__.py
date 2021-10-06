@@ -435,7 +435,7 @@ class _Attribute(object):
         return _depNode.findPlug(_attr, False)
 
     def asMfnAttr(self):
-        return MFnAttribute(self._asPlug().attribute())
+        return MFnAttribute(self.asPlug().attribute())
 
     def numElements(self):
         return cmds.getAttr(self._path, size=True)
