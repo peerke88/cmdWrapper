@@ -1,4 +1,4 @@
-import unittest, os, sys, logging, cProfile
+import unittest, os, sys, logging, cProfile, pstats, subprocess
 
 _basePath = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if not _basePath in sys.path:
