@@ -260,6 +260,9 @@ class Matrix(MMatrix):
     def rotation(self):
         return Euler(MTransformationMatrix(self).rotation())
 
+    def quaternion(self):
+        return QuaternionOrPoint(MTransformationMatrix(self).rotation(True))
+
 
 class Vector(MVector):
     def __init__(self, *args):
