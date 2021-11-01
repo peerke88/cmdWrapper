@@ -124,7 +124,11 @@ def _installMathFunctions(cls, size, wrap_return_attrs, ops):
 
     def __getstate__(self):
         # make sure this object returns a list so pickle works
-        return [i for i in range(len(self))]
+        return [self[i] for i in range(size)]
+
+    def __setstate__(self, *args):
+        # make sure this object returns a dict so pickle works
+        return self.__dict__
 
     def __repr__(self):
         return '[%s] : %s' % (', '.join(str(self[i]) for i in range(size)), self.__class__.__name__)
@@ -201,6 +205,8 @@ def _installMathFunctions(cls, size, wrap_return_attrs, ops):
         # noinspection PyUnresolvedReferences
         return _wrap(super(cls, self).__floordiv__(right))
 
+    cls.__getstate__ = __getstate__
+    cls.__setstate__ = __setstate__
     cls.__repr__ = __repr__
     cls.__getitem__ = __getitem__
     cls.__setitem__ = __setitem__
@@ -644,6 +650,10 @@ class DependNode(object):
     def __getstate__(self):
         # make sure this object returns a list so pickle works
         return self._nodeName
+
+    def __setstate__(self, *args):
+        # make sure this object returns a dict so pickle works
+        return self.__dict__
 
     def __getattr__(self, attr):
         return _Attribute(self._nodeName + '.' + attr)
