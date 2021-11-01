@@ -259,6 +259,21 @@ class TestCmds(unittest.TestCase):
         rot = transform.rotate()
         self.assertEqual(rot, Euler())
 
+    def testPickle(self):
+        import pickle
+        from cmdWrapper import cmds, Vector
+
+        testObject = cmds.createNode("transform", n="myObject")
+        myPickledObject = pickle.dumps(testObject) 
+        myEntry = pickle.loads(myPickledObject)
+        self.assertEqual(testObject, myEntry)
+
+        testVector = Vector(9,1,6)
+        myPickledObject = pickle.dumps(testVector) 
+        myEntry = pickle.loads(myPickledObject)
+        print(myEntry)
+        self.assertEqual(myEntry, Vector(9,1,6))     
+
 
 if __name__ == '__main__':
     unittest.main()

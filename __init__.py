@@ -126,9 +126,9 @@ def _installMathFunctions(cls, size, wrap_return_attrs, ops):
         # make sure this object returns a list so pickle works
         return [self[i] for i in range(size)]
 
-    def __setstate__(self, *args):
-        # make sure this object returns a dict so pickle works
-        return self.__dict__
+    def __setstate__(self, inSettings):
+        # make sure this sets the current list on the correct class
+        super(cls, self).__init__(inSettings)
 
     def __repr__(self):
         return '[%s] : %s' % (', '.join(str(self[i]) for i in range(size)), self.__class__.__name__)
@@ -648,12 +648,18 @@ class DependNode(object):
         return (self.__type, self._nodeName)
 
     def __getstate__(self):
-        # make sure this object returns a list so pickle works
-        return self._nodeName
-
-    def __setstate__(self, *args):
-        # make sure this object returns a dict so pickle works
-        return self.__dict__
+        # make sure this object returns a string so pickle works
+        # return self._nodeName
+        return (self.__type, self._nodeName)
+        
+    def __setstate__(self, inSettings):
+        inType, inNodeName = inSettings
+        self.__type = inType
+        if _cmds.ls(inNodeName, l=True)[0][0] == '|':
+            self.__handle = _getMDagPath(inNodeName)
+            assert self.__handle.isValid()
+        else:
+            self.__handle = _getMObject(inNodeName)
 
     def __getattr__(self, attr):
         return _Attribute(self._nodeName + '.' + attr)
