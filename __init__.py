@@ -470,6 +470,9 @@ class _Attribute(object):
     def isDestination(self):
         return bool(cmds.listConnections(self._path, s=True, d=False))
 
+    def type(self):
+        return cmds.getAttr(self._path, type=True)
+
     def __str__(self):
         return self._path  # so we can easily throw Attribute() objects into maya functions
 
@@ -579,6 +582,8 @@ class DependNode(object):
     def pool(cls, nodeName, nodeType):
         # Using internal Maya cmds to avoid recursive calls (wrapped cmds.ls() constructs DependNode objects when necessary)
         key = _cmds.ls(nodeName, uuid=True)[0]
+        if ":" in nodeName:
+            key = nodeName.split(":")[0] + key
         inst = DependNode._instances.get(key, None)
         if inst is None:
             inst = cls(nodeName, nodeType)
@@ -616,8 +621,8 @@ class DependNode(object):
         self._apiObjectHelper.getDependNode(0, o)
         return o
 
-    def delete(self):
-        cmds.delete(self._nodeName)
+    def delete(self, constructionHistory=False):
+        cmds.delete(self._nodeName, ch=constructionHistory)
 
     def name(self):
         return self._nodeName.rsplit('|', 1)[-1]
@@ -651,7 +656,7 @@ class DependNode(object):
         # make sure this object returns a string so pickle works
         # return self._nodeName
         return (self.__type, self._nodeName)
-        
+
     def __setstate__(self, inSettings):
         inType, inNodeName = inSettings
         self.__type = inType
@@ -713,11 +718,11 @@ class DagNode(DependNode):
         if p:
             return wrapNode(p)
 
-    def setParent(self, parent, shape=False):
+    def setParent(self, parent, shape=False, relative=False):
         if shape:
-            cmds.parent(self._nodeName, parent, add=True, s=True)
+            cmds.parent(self._nodeName, parent, add=True, s=True, r=relative)
             return
-        cmds.parent(self._nodeName, parent)
+        cmds.parent(self._nodeName, parent, r=relative)
 
     def shortName(self):
         return self._nodeName.rsplit('|', 1)[-1]
