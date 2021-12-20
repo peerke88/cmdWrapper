@@ -44,6 +44,8 @@ from maya.OpenMaya import MGlobal as _oldMGlobal
 # noinspection PyUnresolvedReferences
 from maya.OpenMaya import MObject as _oldMObject
 
+from json import JSONEncoder
+
 import sys
 
 if sys.version_info.major == 2:
@@ -58,6 +60,14 @@ if sys.version_info.major == 2:
     range = xrange
 else:
     basestring = str
+
+
+def _default(self, obj):
+    return getattr(obj.__class__, "to_json", _default.default)(obj)
+
+
+_default.default = JSONEncoder().default
+JSONEncoder.default = _default
 
 _debug = False
 
@@ -626,6 +636,9 @@ class DependNode(object):
 
     def name(self):
         return self._nodeName.rsplit('|', 1)[-1]
+
+    def to_json(self):
+        return self._nodeName
 
     @property
     def _nodeName(self):
