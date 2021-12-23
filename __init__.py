@@ -720,6 +720,9 @@ class DependNode(object):
     def plug(self, attr):  # TODO: Refactor this away
         return getattr(self, attr)
 
+    def customPlugs(self):
+        return [self.plug(attr) for attr in cmds.listAttr(self._nodeName, ud=1)]
+
     def asMObject(self):  # TODO: Refactor this away by making getMObject public
         return _getMObject(self._nodeName)
 
