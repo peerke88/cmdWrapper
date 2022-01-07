@@ -140,6 +140,9 @@ def _installMathFunctions(cls, size, wrap_return_attrs, ops):
         # make sure this sets the current list on the correct class
         super(cls, self).__init__(inSettings)
 
+    def to_json(self):
+        return [self[i] for i in range(size)]
+
     def __repr__(self):
         return '[%s] : %s' % (', '.join(str(self[i]) for i in range(size)), self.__class__.__name__)
 
@@ -223,6 +226,7 @@ def _installMathFunctions(cls, size, wrap_return_attrs, ops):
     cls.__iter__ = __iter__
     cls.__eq__ = __eq__
     cls.__ne__ = __ne__
+    cls.to_json = to_json
     cls._wrap = _wrap
     cls.__getattribute__ = __getattribute__
     if ops:
