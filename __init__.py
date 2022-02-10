@@ -452,6 +452,9 @@ class _Attribute(object):
         # Python generates a default __iter__ function and we don't want that.
         raise RuntimeError()
 
+    def to_json(self):
+        return self._path
+
     def asPlug(self):
         _node, _attr = self._path.split('.', 1)
         _depNode = MFnDependencyNode(_getMObject(_node))
