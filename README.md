@@ -1,7 +1,7 @@
 # cmd wrapper
 
 A simple & light-wight wrapper for maya cmds and OpenMaya (api2.0) functionality
-
+Find the latest version at https://github.com/peerke88/cmdWrapper
 
 ## Authors
 
