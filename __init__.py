@@ -762,7 +762,16 @@ class Transform(DagNode):
     def _children(self):
         return _cmds.listRelatives(self._nodeName, c=True, f=True) or []
 
-    def children(self):
+    def children(self, recursive=False):
+        if recursive:
+            hierarchy = [self]
+            while self.numChildren() != 0:
+                child = self.child(0)
+                hierarchy.append(child)
+                self = child
+                if child.numChildren() == 0:
+                    break
+            return hierarchy
         return cmds.listRelatives(self._nodeName, c=True, f=True) or []
 
     def allDescendants(self):
