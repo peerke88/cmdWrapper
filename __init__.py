@@ -600,7 +600,7 @@ class DependNode(object):
         # Using internal Maya cmds to avoid recursive calls (wrapped cmds.ls() constructs DependNode objects when necessary)
         key = _cmds.ls(nodeName, uuid=True)[0]
         if ":" in nodeName:
-            key = nodeName.split(":")[0] + key
+            key = list(filter(None, nodeName.split(":")))[0] + key
         inst = DependNode._instances.get(key, None)
         if inst is None:
             inst = cls(nodeName, nodeType)
