@@ -838,6 +838,12 @@ _wrapperTypes = {
     'cMuscleObject': Shape,
     'camera': Shape,
     'annotationShape': Shape,
+    'implicitSphere': Shape,
+    'implicitBox': Shape,
+    'implicitCone': Shape,
+    'renderSphere': Shape,
+    'renderBox': Shape,
+    'renderCone': Shape
 }
 
 
