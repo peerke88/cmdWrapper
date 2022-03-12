@@ -759,17 +759,19 @@ class Transform(DagNode):
     def shapes(self):
         return cmds.listRelatives(self._nodeName, c=True, f=True, type='shape') or []
 
-    def _children(self):
+    def _children(self, type=None):
+        if type:
+            return _cmds.listRelatives(self._nodeName, c=True, f=True, type=type) or []
         return _cmds.listRelatives(self._nodeName, c=True, f=True) or []
 
     def children(self, recursive=False):
         if recursive:
             hierarchy = [self]
-            while self.numChildren() != 0:
-                child = self.child(0)
+            while self._children("transform") != []:
+                child = getNode(self._children("transform")[0])
                 hierarchy.append(child)
                 self = child
-                if child.numChildren() == 0:
+                if child._children("transform") == []:
                     break
             return hierarchy
         return cmds.listRelatives(self._nodeName, c=True, f=True) or []
