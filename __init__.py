@@ -265,6 +265,9 @@ class Matrix(MMatrix):
     def asT(self):
         return Vector(self[12], self[13], self[14])
 
+    def asS(self):
+        return Vector(self.axis(0).length(), self.axis(1).length(), self.axis(2).length())
+
     def axis(self, index):
         i = index * 4
         return Vector(self[i], self[i + 1], self[i + 2])
