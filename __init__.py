@@ -429,7 +429,7 @@ class _Attribute(object):
 
     def __call__(self, *args):
         if args:
-            raise AttributeError('Attempting to get an attribute %s, but you are passing attributes into the getter.'
+            raise AttributeError('Attempting to get an attribute %s, but you are passing arguments into the getter.'
                                  'Are you trying to call a function and misspelled something?' % self)
         return self.get()
 
@@ -452,8 +452,8 @@ class _Attribute(object):
         self[index].set(value)
 
     def __iter__(self):
-        # Python generates a default __iter__ function and we don't want that.
-        raise RuntimeError()
+        for index in cmds.getAttr(self._path, multiIndices=True) or []:
+            yield self[index]
 
     def to_json(self):
         return self._path
