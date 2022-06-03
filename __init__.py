@@ -746,8 +746,14 @@ class DagNode(DependNode):
 
     def setParent(self, parent, shape=False, relative=False):
         if shape:
+            if parent is None:
+                raise ValueError("cannot parent shape to world!")
+                return
             cmds.parent(self._nodeName, parent, add=True, s=True, r=relative)
             return
+        if parent is None:
+            cmds.parent(self._nodeName, world=True, r=relative)
+            return 
         cmds.parent(self._nodeName, parent, r=relative)
 
     def shortName(self):
