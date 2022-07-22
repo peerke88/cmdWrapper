@@ -721,8 +721,11 @@ class DependNode(object):
                 kwargs['at'] = t
         cmds.addAttr(self._nodeName, ln=longName, **kwargs)
 
+    def deleteAttr(self, attrName):
+        cmds.deleteAttr(self._nodeName, at=attrName)
+
     def plugs(self, ud=False):
-        return [_Attribute(self._nodeName + '.' + attr) for attr in cmds.listAttr(self._nodeName, ud=ud)]
+        return [_Attribute(self._nodeName + '.' + attr) for attr in _cmds.listAttr(self._nodeName, ud=ud)]
 
     def isShape(self):
         return self.__type in [key for key in _wrapperTypes.keys() if Shape == _wrapperTypes[key]]
@@ -753,7 +756,7 @@ class DagNode(DependNode):
             return
         if parent is None:
             cmds.parent(self._nodeName, world=True, r=relative)
-            return 
+            return
         cmds.parent(self._nodeName, parent, r=relative)
 
     def shortName(self):
