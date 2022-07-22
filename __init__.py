@@ -722,7 +722,8 @@ class DependNode(object):
         cmds.addAttr(self._nodeName, ln=longName, **kwargs)
 
     def deleteAttr(self, attrName):
-        cmds.deleteAttr(self._nodeName, at=attrName)
+        if self.hasAttr(attrName):
+            cmds.deleteAttr(self._nodeName, at=attrName)
 
     def plugs(self, ud=False):
         return [_Attribute(self._nodeName + '.' + attr) for attr in _cmds.listAttr(self._nodeName, ud=ud)]
