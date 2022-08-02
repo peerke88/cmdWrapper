@@ -34,7 +34,7 @@ from math import degrees
 
 # noinspection PyUnresolvedReferences
 from maya.api.OpenMaya import MMatrix, MVector, MTransformationMatrix, MGlobal, MDagPath, \
-    MFnDependencyNode, MDGModifier, MDagModifier, MObject, MEulerRotation, MPoint, MQuaternion, MFnAttribute
+    MFnDependencyNode, MDGModifier, MDagModifier, MObject, MEulerRotation, MPoint, MQuaternion, MFnAttribute, MFn
 # noinspection PyUnresolvedReferences
 from maya import cmds as _cmds
 # noinspection PyUnresolvedReferences
@@ -729,7 +729,7 @@ class DependNode(object):
         return [_Attribute(self._nodeName + '.' + attr) for attr in _cmds.listAttr(self._nodeName, ud=ud)]
 
     def isShape(self):
-        return self.__type in [key for key in _wrapperTypes.keys() if Shape == _wrapperTypes[key]]
+        return self.asMObject().hasFn(MFn.kShape)
 
     def plug(self, attr):  # TODO: Refactor this away
         return getattr(self, attr)
@@ -836,32 +836,6 @@ class Shape(DagNode):
     pass
 
 
-_wrapperTypes = {
-    'dagContainer': Transform,
-    'transform': Transform,
-    'ikEffector': Transform,
-    'ikHandle': Transform,
-    'joint': Joint,
-    'nurbsCurve': Shape,
-    'nurbsSurface': Shape,
-    'mesh': Shape,
-    'follicle': Shape,
-    'RigSystemControl': Shape,
-    'distanceDimShape': Shape,
-    'locator': Shape,
-    'cMuscleKeepOut': Shape,
-    'cMuscleObject': Shape,
-    'camera': Shape,
-    'annotationShape': Shape,
-    'implicitSphere': Shape,
-    'implicitBox': Shape,
-    'implicitCone': Shape,
-    'renderSphere': Shape,
-    'renderBox': Shape,
-    'renderCone': Shape
-}
-
-
 def wrapNode(nodeName):
     if isinstance(nodeName, basestring) and '.' in nodeName:
         nodeName, suffix = nodeName.split('.', 1)
@@ -872,7 +846,18 @@ def wrapNode(nodeName):
     if not cmds.objExists(nodeName):
         return None
     nodeType = _cmds.nodeType(nodeName)
-    return _wrapperTypes.get(nodeType, DependNode).pool(nodeName, nodeType)
+
+    _mobj = MGlobal.getSelectionListByName(nodeName).getDependNode(0)
+
+    _type = DependNode
+    if _mobj.hasFn(MFn.kShape):
+        _type = Shape
+    elif _mobj.hasFn(MFn.kJoint):
+        _type = Joint
+    elif _mobj.hasFn(MFn.kTransform):
+        _type = Transform
+
+    return _type.pool(nodeName, nodeType)
 
 
 def createNode(nodeType):
