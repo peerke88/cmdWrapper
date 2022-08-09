@@ -33,7 +33,7 @@ import functools
 from math import degrees
 
 # noinspection PyUnresolvedReferences
-from maya.api.OpenMaya import MMatrix, MVector, MTransformationMatrix, MGlobal, MDagPath, \
+from maya.api.OpenMaya import MMatrix, MVector, MTransformationMatrix, MGlobal, MDagPath, MFn, \
     MFnDependencyNode, MDGModifier, MDagModifier, MObject, MEulerRotation, MPoint, MQuaternion, MFnAttribute, MFn
 # noinspection PyUnresolvedReferences
 from maya import cmds as _cmds
@@ -726,7 +726,7 @@ class DependNode(object):
             cmds.deleteAttr(self._nodeName, at=attrName)
 
     def plugs(self, ud=False):
-        return [_Attribute(self._nodeName + '.' + attr) for attr in _cmds.listAttr(self._nodeName, ud=ud)]
+        return [_Attribute(self._nodeName + '.' + attr) for attr in (_cmds.listAttr(self._nodeName, ud=ud) or [])]
 
     def isShape(self):
         return self.asMObject().hasFn(MFn.kShape)
@@ -735,7 +735,7 @@ class DependNode(object):
         return getattr(self, attr)
 
     def customPlugs(self):
-        return [self.plug(attr) for attr in cmds.listAttr(self._nodeName, ud=1)]
+        return [self.plug(attr) for attr in (cmds.listAttr(self._nodeName, ud=1) or [])]
 
     def asMObject(self):  # TODO: Refactor this away by making getMObject public
         return _getMObject(self._nodeName)
