@@ -142,6 +142,9 @@ loc.translateX = vecC[0]
 loc.translate = vecC #assign vector directly to double3 attribute 
 
 vecE = vecA ^ vecC
-nMat = Matrix(vecA.normal()[:] +[0] + vecE.normal()[:] +[0] + vecC.normal()[:]+[0] + loc1.translate()[:] + [1] ) #slice and assign data to matrix
+nMat = Matrix( vecA.normal()[:] + [0] + 
+               vecE.normal()[:] + [0] + 
+               vecC.normal()[:] + [0] + 
+               loc1.translate.get()[:] + [1] ) #slice and assign data to matrix
 loc.setM(nMat) #set newly created matrix 
 ```

@@ -305,6 +305,23 @@ class Vector(MVector):
     def rotateTo(self, other):
         return QuaternionOrPoint(super(Vector, self).rotateTo(other))
 
+    def invert(self):
+        return self * -1
+
+    def isPositive(self):
+        return (sum(self[::]) > 0)
+
+    def isNegative(self):
+        return (sum(self[::]) < 0)
+
+    def isX(self):
+        return (abs(self.normal() * Vector.xAxis) > .999)
+
+    def isY(self):
+        return (abs(self.normal() * Vector.yAxis) > .999)
+
+    def isZ(self):
+        return (abs(self.normal() * Vector.zAxis) > .999)
 
 class Euler(MEulerRotation):
     def asQuaternion(self):
