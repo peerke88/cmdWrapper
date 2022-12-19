@@ -323,6 +323,7 @@ class Vector(MVector):
     def isZ(self):
         return (abs(self.normal() * Vector.zAxis) > .999)
 
+
 class Euler(MEulerRotation):
     def asQuaternion(self):
         return QuaternionOrPoint(super(Euler, self).asQuaternion())
@@ -779,6 +780,9 @@ class DagNode(DependNode):
 
     def shortName(self):
         return self._nodeName.rsplit('|', 1)[-1]
+
+    def asDagPath(self):
+        return _getMDagPath(self._nodeName)
 
 
 class Transform(DagNode):
