@@ -487,6 +487,10 @@ class _Attribute(object):
     def numElements(self):
         return cmds.getAttr(self._path, size=True)
 
+    def logicalIndex(self):
+        _name =self.name()
+        return int(_name[_name.index("[") + 1: -1])
+
     def node(self):
         return wrapNode(self._path.split('.', 1)[0])
 
