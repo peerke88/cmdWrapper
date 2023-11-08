@@ -198,6 +198,13 @@ def _installMathFunctions(cls, size, wrap_return_attrs, ops):
         # noinspection PyUnresolvedReferences
         return _wrap(super(cls, self).__add__(right))
 
+    def __radd__(self, right):
+        # noinspection PyUnresolvedReferences
+        if right == 0:
+            return self
+        else:
+            return self.__add__(right)
+
     def __mul__(self, right):
         # noinspection PyUnresolvedReferences
         return _wrap(super(cls, self).__mul__(right))
@@ -232,6 +239,7 @@ def _installMathFunctions(cls, size, wrap_return_attrs, ops):
     if ops:
         if '+' in ops:
             cls.__add__ = __add__
+            cls.__radd__ = __radd__
         if '-' in ops:
             cls.__sub__ = __sub__
         if '*' in ops:
