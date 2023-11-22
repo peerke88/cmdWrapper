@@ -27,11 +27,8 @@ SOFTWARE.
 Thin wrapper around Maya API & cmds to make interacting with nodes more convenient.
 Read more over at https://github.com/peerke88/cmdWrapper
 """
-import warnings
-import functools
-
+import warnings, sys functools
 from math import degrees
-
 # noinspection PyUnresolvedReferences
 from maya.api.OpenMaya import MMatrix, MVector, MTransformationMatrix, MGlobal, MDagPath, MFn, \
     MFnDependencyNode, MDGModifier, MDagModifier, MObject, MEulerRotation, MPoint, MQuaternion, MFnAttribute, MFn
@@ -43,10 +40,7 @@ from maya.OpenMaya import MSelectionList as _oldMSelectionList
 from maya.OpenMaya import MGlobal as _oldMGlobal
 # noinspection PyUnresolvedReferences
 from maya.OpenMaya import MObject as _oldMObject
-
 from json import JSONEncoder
-
-import sys
 
 if sys.version_info.major == 2:
     # Override python 2 with python 3 behaviour so the 'new' names are their faster, iterator based versions
@@ -61,23 +55,18 @@ if sys.version_info.major == 2:
 else:
     basestring = str
 
-
 def _default(self, obj):
     return getattr(obj.__class__, "to_json", _default.default)(obj)
 
-
 _default.default = JSONEncoder().default
 JSONEncoder.default = _default
-
 _debug = False
-
 
 class _Cmd(object):
     """
     We hijack maya.cmds to ensure we can call cmds functions with DependNode
     and _Attribute instance arguments instead of strings.
     """
-
     def __init__(self, fn):
         self.fn = fn
 
@@ -108,26 +97,20 @@ class _Cmd(object):
 
         return _wrapMathObjects(return_value)
 
-
 class _Cmds(object):
     def __getattr__(self, item):
         return _Cmd(getattr(_cmds, item))
 
-
 cmds = _Cmds()
-
 
 def _getMObject(nodeName):
     return MGlobal.getSelectionListByName(nodeName).getDependNode(0)
 
-
 def _getMDagPath(nodeName):
     return MGlobal.getSelectionListByName(nodeName).getDagPath(0)
 
-
 def _wrapReturnValue(cls, fn, *args, **kwargs):
     return cls(fn(*args, **kwargs))
-
 
 def _installMathFunctions(cls, size, wrap_return_attrs, ops):
     # type: (type, int, tuple, str)->None
@@ -251,7 +234,6 @@ def _installMathFunctions(cls, size, wrap_return_attrs, ops):
         if '^' in ops:
             cls.__xor__ = __xor__
 
-
 class Matrix(MMatrix):
     def __init__(self, *args):
         if len(args) == 16:
@@ -294,7 +276,6 @@ class Matrix(MMatrix):
     def quaternion(self):
         return QuaternionOrPoint(MTransformationMatrix(self).rotation(True))
 
-
 class Vector(MVector):
     def __init__(self, *args):
         if len(args) == 1 and isinstance(args[0], MQuaternion):
@@ -331,7 +312,6 @@ class Vector(MVector):
     def isZ(self):
         return (abs(self.normal() * Vector.zAxis) > .999)
 
-
 class Euler(MEulerRotation):
     def asQuaternion(self):
         return QuaternionOrPoint(super(Euler, self).asQuaternion())
@@ -350,7 +330,6 @@ class Euler(MEulerRotation):
 
     def __repr__(self):
         return '[%s] %s : %s' % (', '.join(str(self[i]) for i in range(3)), self.order, self.__class__.__name__)
-
 
 class QuaternionOrPoint(MQuaternion):
     def __init__(self, *args):
@@ -379,7 +358,6 @@ class QuaternionOrPoint(MQuaternion):
     def asMatrix(self):
         return Matrix(super(QuaternionOrPoint, self).asMatrix())
 
-
 # TODO: If this is slow to import maybe we need to write it all out so it's just all one big pyc instead of a bunch of dynamic changes
 _installMathFunctions(Matrix, 16, ('transpose', 'inverse', 'adjoint', 'homogenize'), '+-*')
 _installMathFunctions(Vector, 3, ('rotateBy', 'normal', 'transformAsNormal'), '+-*/^')
@@ -401,7 +379,6 @@ Vector.yNegAxis = Vector(0, -1, 0)
 Vector.zNegAxis = Vector(0, 0, -1)
 Vector.one = Vector(1, 1, 1)
 
-
 def _wrapMathObjects(value):
     # This tries to wrap the value into a math object
     # only does something if the value is a list or tuple containing
@@ -419,7 +396,6 @@ def _wrapMathObjects(value):
         return Matrix(value)
     return value
 
-
 class _Attribute(object):
     """
     NOTE: This class implements __setattr__, as such any members assigned to self
@@ -434,7 +410,6 @@ class _Attribute(object):
     attr.set(10.0)
     node.attr = 10.0
     """
-
     def __init__(self, path):
         self._path = path
         self._setterKwargs = {}
@@ -480,6 +455,21 @@ class _Attribute(object):
     def __iter__(self):
         for index in cmds.getAttr(self._path, multiIndices=True) or []:
             yield self[index]
+
+    def __lshift__(self, other):  
+        [self.connect(x) for x in other]
+
+    def __rshift__(self, other):
+        self.connect(other)        
+
+    def __le__(self, other):
+        self.set(other.get())
+
+    def __floordiv__(self, other):
+        if isinstance(other, (list, tuple)):
+            [self.disconnect(x) for x in other]
+            return
+        self.disconnect(other)
 
     def to_json(self):
         return self._path
@@ -601,12 +591,10 @@ class _Attribute(object):
                 attr.setChannelBox(cb, False)
         cmds.setAttr(self._path, channelBox=cb)
 
-
 class _Transform_Rotate_Attribute(_Attribute):
     def get(self):
         angles = cmds.getAttr(self._path)[0]
         return Euler(angles[0], angles[1], angles[2], cmds.getAttr(self._path.split('.', 1)[0] + '.rotateOrder'))
-
 
 class DependNode(object):
     """
@@ -633,7 +621,7 @@ class DependNode(object):
         # Using internal Maya cmds to avoid recursive calls (wrapped cmds.ls() constructs DependNode objects when necessary)
         key = _cmds.ls(nodeName, uuid=True)[0]
         if ":" in nodeName:
-            key = list(filter(None, nodeName.split(":")))[0] + key
+            key = list(filter(None, nodeName.split(":", 1)))[0] + key
         inst = DependNode._instances.get(key, None)
         if inst is None:
             inst = cls(nodeName, nodeType)
@@ -684,6 +672,8 @@ class DependNode(object):
     def _nodeName(self):
         if isinstance(self.__handle, MDagPath):
             return self.__handle.fullPathName()
+        if self.__handle is None:
+            return ''
         self._MFnDependencyNode.setObject(self.__handle)
         return self._MFnDependencyNode.name()
 
@@ -770,7 +760,6 @@ class DependNode(object):
     def asMObject(self):  # TODO: Refactor this away by making getMObject public
         return _getMObject(self._nodeName)
 
-
 class DagNode(DependNode):
     # Note the base class implements __setattr__, so we should not introduce new member variables, only functions.
     def parent(self):
@@ -795,7 +784,6 @@ class DagNode(DependNode):
 
     def asDagPath(self):
         return _getMDagPath(self._nodeName)
-
 
 class Transform(DagNode):
     # Note the base class implements __setattr__, so we should not introduce new member variables, only functions.
@@ -848,7 +836,6 @@ class Transform(DagNode):
             return _Transform_Rotate_Attribute(self._nodeName + '.' + attr)
         return _Attribute(self._nodeName + '.' + attr)
 
-
 class Joint(Transform):
     # Note the base class implements __setattr__, so we should not introduce new member variables, only functions.
     def setJointOrientMatrix(self, m, ws=False):
@@ -863,11 +850,9 @@ class Joint(Transform):
         m *= Matrix(parentInverseMatrix)
         cmds.setAttr(self._nodeName + '.jointOrient', *m.asDegrees(), type='double3')
 
-
 class Shape(DagNode):
     # Note the base class implements __setattr__, so we should not introduce new member variables, only functions.
     pass
-
 
 def wrapNode(nodeName):
     if isinstance(nodeName, basestring) and '.' in nodeName:
@@ -892,7 +877,6 @@ def wrapNode(nodeName):
 
     return _type.pool(nodeName, nodeType)
 
-
 def createNode(nodeType):
     # Api with undo/redo support, we profiled this to be faster than cmds.createNode:
     # noinspection PyBroadException
@@ -907,7 +891,6 @@ def createNode(nodeType):
     node = DependNode.fnInstance().name()
     return wrapNode(node)
 
-
 def _isStringOrStringList(inObject):
     if isinstance(inObject, basestring):
         return True
@@ -916,7 +899,6 @@ def _isStringOrStringList(inObject):
     if all(_isStringOrStringList(elem) for elem in inObject):
         return True
     return False
-
 
 def getNode(nodeName=None):
     if nodeName is None:
@@ -948,11 +930,9 @@ def getNode(nodeName=None):
         return wrapped[0]
     return wrapped
 
-
 def selection():
     # alias for getNode with no arguments
     return getNode()
-
 
 def _iter_transforms(nodeList):
     if not isinstance(nodeList, (list, tuple)):
@@ -963,10 +943,8 @@ def _iter_transforms(nodeList):
             continue
         yield node
 
-
 def parents(nodeList):
     return list({node.parent() for node in _iter_transforms(nodeList)})
-
 
 def children(nodeList):
     unique_children = set()
@@ -974,7 +952,6 @@ def children(nodeList):
         for ch in node.children():
             unique_children.add(ch)
     return unique_children
-
 
 def allDescendants(nodeList):
     unique_children = set()
