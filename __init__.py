@@ -463,6 +463,9 @@ class _Attribute(object):
         self.connect(other)        
 
     def __le__(self, other):
+        if not isinstance(other, type(self)):
+            self.set(other)
+            return
         self.set(other.get())
 
     def __floordiv__(self, other):
