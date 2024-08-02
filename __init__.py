@@ -285,7 +285,7 @@ class Matrix(MMatrix):
         return Euler(MTransformationMatrix(self).rotation())
 
     def quaternion(self):
-        return QuaternionOrPoint(MTransformationMatrix(self).rotation(True))
+        return QuaternionOrPoint().setValue(self)
 
 
 class Vector(MVector):
@@ -552,6 +552,14 @@ class _Attribute(object):
         for source in self.connections(s=True, d=False):
             cmds.disconnectAttr(str(source), self._path)
 
+    def disconnectOutputs(self):
+        for target in self.connections(s=False, d=True):
+            cmds.disconnectAttr(self._path, str(target))
+
+    def disconnectAll(self):
+        self.disconnectInputs()
+        self.disconnectOutputs()
+        
     def disconnect(self, destination):
         cmds.disconnectAttr(self._path, str(destination))
 
@@ -843,6 +851,9 @@ class Transform(DagNode):
 
     def child(self, index=0):
         return wrapNode(self._children()[index])
+
+    def parents(self):
+        return [wrapNode(node) for node in self._nodeName.split("|") if not node in ["", self.name()]]
 
     def getT(self, ws=False):
         return Vector(*cmds.xform(self._nodeName, q=True, ws=ws, t=True))
