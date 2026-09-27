@@ -1,7 +1,25 @@
-import unittest
 import os
+import unittest
 import random
 import math
+
+# ---- Headless / Qt hygiene (MUST be before maya.standalone) ----
+os.environ.setdefault("MAYA_DEBUG_ENABLE_CRASH_REPORTING", "0")
+os.environ.setdefault("PYMEL_SKIP_MEL_INIT", "1")         # canonical value for headless
+os.environ.setdefault("MAYA_NO_CONSOLE_WINDOW", "1")
+
+try:
+    # Set the attribute before any QGuiApplication is constructed
+    from PySide6.QtCore import QCoreApplication, Qt
+    QCoreApplication.setAttribute(Qt.AA_ShareOpenGLContexts, True)
+except Exception:
+    # PySide6 might not be needed/available in some runs; that's OK
+    pass
+
+# ---- Initialize Maya once per process ----
+import maya.standalone
+maya.standalone.initialize(name="python")
+
 
 
 class TestCmds(unittest.TestCase):
@@ -25,18 +43,18 @@ class TestCmds(unittest.TestCase):
 
     def test_basics(self):
         # import wrappers
-        from cmdWrapper import cmds, createNode, getNode, DependNode, children, allDescendants, Matrix, selection
+        from cmdWrapper import cmds, createNode, getNode, DependNode, Matrix
         from maya.api import OpenMaya
         transform = createNode('transform')
         self.assertEqual(str(transform), '|transform1')
         # get and set translate
-        self.assertEqual(transform.tx(), 0.0)
+        self.assertEqual(transform.tx.get(), 0.0)
         self.assertEqual(transform.translate.get(), (0.0, 0.0, 0.0))
         transform.translate = 10.0, 1.0, 0.0
         # noinspection PyCallingNonCallable
-        self.assertEqual(transform.translate(), (10.0, 1.0, 0.0))
+        self.assertEqual(transform.translate.get(), (10.0, 1.0, 0.0))
         transform.tx.set(2.0)
-        self.assertEqual(transform.tx(), 2.0)
+        self.assertEqual(transform.tx.get(), 2.0)
         # find a node & it's shape
         persp_transform = getNode('persp')
         persp_shape = persp_transform.shape()
@@ -67,8 +85,8 @@ class TestCmds(unittest.TestCase):
         cmds.joint()
         cmds.joint()
         cmds.joint()
-        self.assertEqual(children('|joint1'), {getNode('|joint1|joint2')})
-        self.assertEqual(allDescendants('|joint1'), set(getNode(('|joint1|joint2', '|joint1|joint2|joint3'))))
+        self.assertEqual(cmds.ls('|joint1')[0].child(), getNode('|joint1|joint2'))
+        self.assertEqual(cmds.ls('|joint1')[0].children(True), getNode(('|joint1', '|joint1|joint2', '|joint1|joint2|joint3')))
         for inst in cmds.ls(sl=0)[::5]:
             assert isinstance(inst, DependNode)
         crc = cmds.circle()[0]
@@ -125,9 +143,7 @@ class TestCmds(unittest.TestCase):
         self.assertEqual(trs[0].stringTest.get(), "myStringTest")
 
         cmds.select(trs[0], r=1)
-        print(cmds.ls(sl=1))
-        print(selection())
-        self.assertEqual(selection(), trs[0])
+        self.assertEqual(cmds.ls(sl=1)[0], trs[0])
 
     def test_attributes(self):
         # import wrappers
@@ -136,11 +152,11 @@ class TestCmds(unittest.TestCase):
         nVec = Vector(5 * random.random(), 5 * random.random(), 5 * random.random())
         loc1 = cmds.spaceLocator()[0]
         loc1.translate = nVec
-        self.assertEqual(nVec, loc1.translate())
+        self.assertEqual(nVec, loc1.translate.get())
         loc2 = cmds.spaceLocator()[0]
         loc2.translate.set(-1.56, 2.603, .556)
-        vecA = loc1.translate()
-        self.assertEqual(loc1.translate(), vecA)
+        vecA = loc1.translate.get()
+        self.assertEqual(loc1.translate.get(), vecA)
         vecB = loc2.translate.get()
         vecA = vecA.normal()
         vecB.normalize()
@@ -151,7 +167,7 @@ class TestCmds(unittest.TestCase):
         loc.translate = vecC
 
         origMat = loc2.worldMatrix[0].get()
-        mat = loc1.worldMatrix[0]()
+        mat = loc1.worldMatrix[0].get()
         loc2.setM(mat)
         loc2.setT(origMat[12:15])
         self.assertEqual(Vector(origMat[12:15]), loc2.getT(ws=True))
@@ -160,7 +176,7 @@ class TestCmds(unittest.TestCase):
             loc2.offsetParentMatrix.set(mat)
 
         vecE = vecA ^ vecC
-        nMat = Matrix(vecA.normal()[:] + [0] + vecE.normal()[:] + [0] + vecC.normal()[:] + [0] + loc1.translate()[:] + [1])
+        nMat = Matrix(vecA.normal()[:] + [0] + vecE.normal()[:] + [0] + vecC.normal()[:] + [0] + loc1.translate.get()[:] + [1])
         loc.setM(nMat)
         a = nMat.rotation()
         self.assertEqual(tuple(math.degrees(b) for b in a), nMat.asR())
@@ -218,7 +234,7 @@ class TestCmds(unittest.TestCase):
         self.assertAlmostEqualIterable(quatRot, QuaternionOrPoint(-0.707107, 0, 0, 0.707107))
 
         decomp = cmds.createNode("decomposeMatrix")
-        mat = decomp.outputQuat().asMatrix()
+        mat = decomp.outputQuat.get().asMatrix()
         d = c * mat
         self.assertEqual(Vector(mat[12:15]), mat.asT())
         self.assertEqual(mat, Matrix())
@@ -239,7 +255,7 @@ class TestCmds(unittest.TestCase):
         transform1 = cmds.createNode("transform", n="testTransform1")
         transform.translate = (1.0, 2.0, 3.0)
         transform.translate.connect(transform1.translate)
-        vec = transform1.translate()
+        vec = transform1.translate.get()
         self.assertEqual(vec, Vector(1.0, 2.0, 3.0))
         self.assertTrue(transform1.translate.isDestination())
         self.assertFalse(transform.translate.isDestination())
@@ -256,8 +272,33 @@ class TestCmds(unittest.TestCase):
         cmds.addAttr(transform1, ln="test", proxy=transform.translateX)
         self.assertTrue(transform1.test.isProxy())
 
-        rot = transform.rotate()
+        rot = transform.rotate.get()
         self.assertEqual(rot, Euler())
+
+    def test_anim_curve_instances_keep_own_function_set(self):
+        from maya import cmds as mc
+        from cmdWrapper import cmds, AnimCurve
+        mc.file(new=True, force=True)
+
+        ownerA = mc.createNode("transform", n="curveOwnerA")
+        ownerB = mc.createNode("transform", n="curveOwnerB")
+        mc.setKeyframe(ownerA, attribute="translateX", time=1, value=1.0)
+        mc.setKeyframe(ownerA, attribute="translateX", time=2, value=2.0)
+        mc.setKeyframe(ownerB, attribute="translateX", time=1, value=10.0)
+        mc.setKeyframe(ownerB, attribute="translateX", time=2, value=20.0)
+
+        curveA = cmds.listConnections(f"{ownerA}.translateX", source=True, destination=False, type="animCurve")[0]
+        curveB = cmds.listConnections(f"{ownerB}.translateX", source=True, destination=False, type="animCurve")[0]
+
+        self.assertIsInstance(curveA, AnimCurve)
+        self.assertIsInstance(curveB, AnimCurve)
+        self.assertEqual(curveB.keys(), {1.0: 10.0, 2.0: 20.0})
+        self.assertEqual(curveA.keys(), {1.0: 1.0, 2.0: 2.0})
+
+        curveA.addKeyframe(3, 3.0)
+
+        self.assertEqual(curveA.keys(), {1.0: 1.0, 2.0: 2.0, 3.0: 3.0})
+        self.assertEqual(curveB.keys(), {1.0: 10.0, 2.0: 20.0})
 
     def testPickle(self):
         import pickle
@@ -271,8 +312,106 @@ class TestCmds(unittest.TestCase):
         testVector = Vector(9,1,6)
         myPickledObject = pickle.dumps(testVector) 
         myEntry = pickle.loads(myPickledObject)
-        print(myEntry)
-        self.assertEqual(myEntry, Vector(9,1,6))     
+        self.assertEqual(myEntry, Vector(9,1,6))        
+
+    def test_wrapper_long_names_and_attr(self):
+        """DAG nodes should stringify to long paths; attributes are wrapped and R/W works."""
+        from maya import cmds as mc
+        from cmdWrapper import cmds
+        mc.file(new=True, force=True)
+
+        mc.joint(n="joint1")
+        a = cmds.ls(sl=1)[0]
+        self.assertTrue(str(a).startswith("|joint1"), f"expected long path, got: {str(a)!r}")
+        self.assertTrue(str(a.translate).endswith("joint1.translate"))
+
+        # round-trip attribute via wrapper path
+        cmds.setAttr(a.translate._path, 1.0, 2.0, 3.0, type="double3")
+        self.assertEqual(tuple(round(x, 4) for x in a.translate.get()), (1.0, 2.0, 3.0))
+        self.assertTrue(a.valid())
+
+    def test_parenting_updates_long_path(self):
+        """After parenting, wrapper should report full DAG path."""
+        from maya import cmds as mc
+        from cmdWrapper import cmds
+        mc.file(new=True, force=True)
+
+        mc.joint(n="joint1")
+        grp = mc.createNode("transform", n="grp")
+        mc.parent("joint1", "grp")
+        a2 = cmds.ls("joint1")[0]
+        self.assertEqual(str(a2), "|grp|joint1")
+
+    def test_getNode_node_attr_and_selection(self):
+        """getNode('node.attr') and getNode() with selection should return wrapped objects."""
+        from maya import cmds as mc
+        from cmdWrapper import cmds, getNode
+        mc.file(new=True, force=True)
+
+        mc.joint(n="joint1")
+        grp = mc.createNode("transform", n="grp")
+        mc.parent("joint1", "grp")
+
+        ta = getNode("|grp|joint1.translate")
+        self.assertIsNotNone(ta)
+        self.assertTrue(ta._path.endswith("joint1.translate"))
+
+        mc.select("|grp|joint1")
+        sel_wrapped = getNode()
+        self.assertTrue(hasattr(sel_wrapped, "valid") and sel_wrapped.valid())
+
+    def test_delete_tombstone(self):
+        """Deleting a wrapped DAG node should tombstone the instance (valid=False, str='')."""
+        from maya import cmds as mc
+        from cmdWrapper import cmds
+        mc.file(new=True, force=True)
+
+        mc.joint(n="joint1")
+        grp = mc.createNode("transform", n="grp")
+        mc.parent("joint1", "grp")
+        a2 = cmds.ls("joint1")[0]
+        cmds.delete(a2)
+        self.assertFalse(a2.valid())
+        self.assertEqual(str(a2), "")
+
+    def test_dg_wrapper_short_name_and_delete(self):
+        """DG nodes stringify to short names; deleting wrapper invalidates it."""
+        from maya import cmds as mc
+        from cmdWrapper import cmds
+        mc.file(new=True, force=True)
+
+        lam = mc.createNode("lambert", n="matFoo")
+        w = cmds.ls("matFoo")[0]
+        self.assertEqual(str(w), "matFoo")
+        self.assertEqual(str(w.message), "matFoo.message")
+        cmds.delete(w)
+        self.assertFalse(w.valid())
+
+    def test_pickle_unpickle_handles(self):
+        """Pickle/unpickle keeps MDagPath for alive DAG; deleted DAG restores as tombstone."""
+        import pickle
+        from maya import cmds as mc
+        from cmdWrapper import cmds
+        mc.file(new=True, force=True)
+
+        # Alive DAG round-trip
+        p = mc.createNode("transform", n="p")
+        c = mc.createNode("transform", n="c")
+        mc.parent("c", "p")
+        wrap_p = cmds.ls("p")[0]
+        data = pickle.dumps(wrap_p)
+        wrap_p2 = pickle.loads(data)
+        self.assertTrue(wrap_p2.valid())
+        self.assertTrue(str(wrap_p2).startswith("|p"))
+
+        # Deleted DAG round-trip Å® tombstone
+        wrap_c = cmds.ls("c")[0]
+        data2 = pickle.dumps(wrap_c)
+        cmds.delete(wrap_c)
+        wrap_c2 = pickle.loads(data2)
+        self.assertFalse(wrap_c2.valid())
+        self.assertEqual(str(wrap_c2), "")
+
 
 
 if __name__ == '__main__':
